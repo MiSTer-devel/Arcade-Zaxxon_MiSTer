@@ -1,0 +1,15 @@
+<misterromdescription>
+	<name>Zaxxon</name>
+	<mameversion>0216</mameversion>
+	<mratimestamp>202003130000</mratimestamp>
+	<year>198X</year>
+	<manufacturer>xxx</manufacturer>
+	<category>xxx</category>
+	<category>xxx</category>
+	<setname>zaxxon</setname>
+	<rbf>zaxxon</rbf>
+	<switches default="00,00">
+		<dip bits="1"    name="Cabinet" ids="Cocktail,Upright"/>
+	</switches>
+	<buttons names="Kick,-,Start 1P,Start 2P,Coin" default="A,Start,Select,R"/>
+</misterromdescription>
