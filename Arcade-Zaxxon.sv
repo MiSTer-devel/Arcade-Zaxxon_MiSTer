@@ -180,9 +180,6 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 reg [7:0] sw[8];
 always @(posedge clk_sys) if (ioctl_wr && (ioctl_index==254) && !ioctl_addr[24:3]) sw[ioctl_addr[2:0]] <= ioctl_dout;
 
-reg [7:0] mod = 0;
-always @(posedge clk_sys) if (ioctl_wr & (ioctl_index==1)) mod <= ioctl_dout;
-
 wire       pressed = ps2_key[9];
 wire [7:0] code    = ps2_key[7:0];
 always @(posedge clk_sys) begin
@@ -246,7 +243,6 @@ reg btn_fire2A = 0;
 //reg btn_fire2C = 0;
 //reg btn_fire2D = 0;
 
-//wire service = sw[1][0];
 
 wire m_start1  = btn_start1 | joy[6];
 wire m_start2  = btn_start2 | joy[7];
@@ -281,11 +277,6 @@ wire m_fire_a  = m_fire1a | m_fire2a;
 
 wire rom_download = ioctl_download && !ioctl_index;
 
-wire [14:0] rom_addr;
-wire  [7:0] rom_do;
-wire [13:0] snd_addr;
-wire  [7:0] snd_do;
-
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
 wire        ioctl_wr;
@@ -308,13 +299,12 @@ zaxxon zaxxon
 //	.video_csync(cs),
 	.video_ce(ce_pix),
 //	.tv15Khz_mode(~status[3]),
-//	.separate_audio(1'b0),
 	.audio_out_l(audio_l),
 	.audio_out_r(audio_r),
 
-//	.dl_addr(ioctl_addr[16:0]),
-//	.dl_wr(ioctl_wr&rom_download),
-//	.dl_data(ioctl_dout),
+	.dl_addr(ioctl_addr[16:0]),
+	.dl_wr(ioctl_wr&rom_download),
+	.dl_data(ioctl_dout),
 
 	.coin1(m_coin1),
 	.coin2(1'b0),
@@ -333,7 +323,9 @@ zaxxon zaxxon
 	.down_c(m_down),
 	.fire_c(m_fire_a),
 	
-	.cocktail(1'b0),
+	.sw1_input(sw[0]), // cocktail(1) / sound(1) / ships(2) / N.U.(2) /  extra ship (2)	
+	.sw2_input(8'h33), // coin b(4) / coin a(4)  -- "3" => 1c_1c
+
 	.service(1'b0),
 	.flip_screen(1'b1)
 );
@@ -341,17 +333,15 @@ zaxxon zaxxon
 wire ce_pix_old;
 wire hs, vs, cs;
 wire hblank, vblank;
-wire HSync, VSync;
 wire [2:0] r,g;
 wire [1:0] b;
 wire ce_pix;
 
-//arcade_video #(512,448,8) arcade_video
 arcade_video #(256,224,8) arcade_video
 (
 	.*,
 
-	.clk_video(clk_48m),
+	.clk_video(clk_sys),
 	.RGB_in({r,g,b}),
 	.HBlank(hblank),
 	.VBlank(vblank),
@@ -359,9 +349,8 @@ arcade_video #(256,224,8) arcade_video
 	.VSync(vs),
 
 	.no_rotate(status[2] | direct_video),
-	.rotate_ccw(0),
+	.rotate_ccw(1'b0),
 	.fx(status[5:3])
-
 );
 
 assign AUDIO_L = { audio_l };

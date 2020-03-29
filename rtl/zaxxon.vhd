@@ -1,7 +1,10 @@
 ---------------------------------------------------------------------------------
--- Zaxxon by Dar (darfpga@aol.fr) ( 23/11/2019 )
+-- Zaxxon by Dar (darfpga@aol.fr) ( 29/03/2020 )
 -- http://darfpga.blogspot.fr
 ---------------------------------------------------------------------------------
+--
+-- release rev 01 : MiSTer / mra update
+--  (29/03/2020)
 --
 -- release rev 00 : initial release
 --  (23/11/2019)
@@ -148,11 +151,16 @@ port(
  down_c         : in std_logic;
  fire_c         : in std_logic;
 
- cocktail       : in std_logic;
+ sw1_input      : in  std_logic_vector( 7 downto 0);
+ sw2_input      : in  std_logic_vector( 7 downto 0);
+ 
  service        : in std_logic;
  flip_screen    : in std_logic;
+    
+ dl_addr        : in  std_logic_vector(16 downto 0);
+ dl_wr          : in  std_logic;
+ dl_data        : in  std_logic_vector( 7 downto 0)
   
- dbg_cpu_addr : out std_logic_vector(15 downto 0)
  );
 end zaxxon;
 
@@ -282,13 +290,27 @@ architecture struct of zaxxon is
  
  signal p1_input  : std_logic_vector(7 downto 0);
  signal p2_input  : std_logic_vector(7 downto 0); 
- signal sw1_input : std_logic_vector(7 downto 0);
- signal sw2_input : std_logic_vector(7 downto 0);
+-- signal sw1_input : std_logic_vector(7 downto 0);
+-- signal sw2_input : std_logic_vector(7 downto 0);
  signal gen_input : std_logic_vector(7 downto 0);
  
  signal coin1_r, coin1_mem, coin1_ena : std_logic := '0';
  signal coin2_r, coin2_mem, coin2_ena : std_logic := '0';
-    
+
+ signal cpu_rom_we : std_logic;
+ signal ch_1_rom_we : std_logic;
+ signal ch_2_rom_we : std_logic;
+ signal bg_1_rom_we : std_logic;
+ signal bg_2_rom_we : std_logic;
+ signal bg_3_rom_we : std_logic;
+ signal sp_1_rom_we : std_logic;
+ signal sp_2_rom_we : std_logic;
+ signal sp_3_rom_we : std_logic;
+ signal map_1_rom_we : std_logic;
+ signal map_2_rom_we : std_logic;
+ signal palette_rom_we : std_logic;
+ signal ch_color_rom_we : std_logic;
+ 
 begin
 
 clock_vid  <= clock_24;
@@ -296,14 +318,12 @@ clock_vidn <= not clock_24;
 reset_n    <= not reset;
 
 -- debug 
-process (reset, clock_vid)
-begin
+--process (reset, clock_vid)
+--begin
 -- if rising_edge(clock_vid) and cpu_ena ='1' and cpu_mreq_n ='0' then
-   --dbg_cpu_addr <=  cpu_addr;
- if rising_edge(clock_vid) then 
-   dbg_cpu_addr <= sp_buffer_ram_do & sp_graphics1_do;
- end if;
-end process;
+--   dbg_cpu_addr <=  cpu_addr;
+-- end if;
+--end process;
 
 -- make enables clock from clock_vid
 process (clock_vid, reset)
@@ -393,18 +413,21 @@ begin
 
 --				if (hcnt >= 256+9-5 or hcnt < 128+9-5) and
 --					 vcnt >= 17 and  vcnt < 240 then video_blankn <= '1';end if;
-					 
-				video_hblank <= '1';
-				if (hcnt >= 256+9-5 or  hcnt < 128+9-5) and
-					vcnt >= 16 and  vcnt < 240 then video_hblank <= '0';
+--					 	
+				if hcnt = 256+9-5 then
+					video_hblank <= '0';
 				end if;
-				
-				video_vblank <= '1';
-				if vcnt >= 16 and vcnt < 240 then
-					video_vblank <= '0';
+				if hcnt = 128+9-5 then
+					video_hblank <= '1';
+				end if;
+
+				if hcnt = 256+9-5 then
+					video_vblank <= '1';
+					if vcnt >= 16 and vcnt < 240 then
+						video_vblank <= '0';
+					end if;
 				end if;
 	
-				
 				-- build syncs pattern (composite)
 				if    hs_cnt =  0 then hsync0 <= '0'; video_hs <= '0';
 				elsif hs_cnt = 29 then hsync0 <= '1'; video_hs <= '1';
@@ -460,8 +483,6 @@ end process;
 ---------------------------------
 p1_input <= "000" & fire   & down   & up   & left   & right  ;
 p2_input <= "000" & fire_c & down_c & up_c & left_c & right_c;
-sw1_input <= cocktail&"111"&x"f"; -- cocktail->FF  upright->7F
-sw2_input <= x"33"; -- coin a/b 1c_1c
 gen_input <= service & coin2_mem & coin1_mem & '0' & start2 & start1 & "00";
 
 ------------------------------------------
@@ -828,11 +849,25 @@ port map(
 );
 
 -- cpu program ROM 0x0000-0x5FFF
-rom_cpu : entity work.zaxxon_cpu
+--rom_cpu : entity work.zaxxon_cpu
+--port map(
+-- clk  => clock_vidn,
+-- addr => cpu_addr(14 downto 0),
+-- data => cpu_rom_do
+--);
+
+cpu_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 12) < "00101" else '0'; -- 00000-04FFF
+
+rom_cpu : entity work.dpram
+generic map( dWidth => 8, aWidth => 15)
 port map(
- clk  => clock_vidn,
- addr => cpu_addr(14 downto 0),
- data => cpu_rom_do
+ clk_a  => clock_vidn,
+ addr_a => cpu_addr(14 downto 0),
+ q_a    => cpu_rom_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(14 downto 0),
+ we_b   => cpu_rom_we,
+ d_b    => dl_data
 );
 
 -- working RAM   0x6000-0x6FFF
@@ -892,85 +927,228 @@ port map(
  q    => sp_buffer_ram_do
 );
 
+
 -- char graphics ROM 1
-bg_graphics_1 : entity work.zaxxon_char_bits_1
+--bg_graphics_1 : entity work.zaxxon_char_bits_1
+--port map(
+-- clk  => clock_vidn,
+-- addr => ch_code_line,
+-- data => ch_graphx1_do
+--);
+
+
+ch_1_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 11) = "001010" else '0'; -- 05000-057FF
+
+bg_graphics_1 : entity work.dpram
+generic map( dWidth => 8, aWidth => 11)
 port map(
- clk  => clock_vidn,
- addr => ch_code_line,
- data => ch_graphx1_do
+ clk_a  => clock_vidn,
+ addr_a => ch_code_line,
+ q_a    => ch_graphx1_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(10 downto 0),
+ we_b   => ch_1_rom_we,
+ d_b    => dl_data
 );
 
+
 -- char graphics ROM 2
-bg_graphics_2 : entity work.zaxxon_char_bits_2
+--bg_graphics_2 : entity work.zaxxon_char_bits_2
+--port map(
+-- clk  => clock_vidn,
+-- addr => ch_code_line,
+-- data => ch_graphx2_do
+--);
+
+ch_2_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 11) = "001011" else '0'; -- 05800-05FFF
+
+bg_graphics_2 : entity work.dpram
+generic map( dWidth => 8, aWidth => 11)
 port map(
- clk  => clock_vidn,
- addr => ch_code_line,
- data => ch_graphx2_do
+ clk_a  => clock_vidn,
+ addr_a => ch_code_line,
+ q_a    => ch_graphx2_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(10 downto 0),
+ we_b   => ch_2_rom_we,
+ d_b    => dl_data
 );
+
 -- map tile ROM 1
-map_tile_1 : entity work.zaxxon_map_1
+--map_tile_1 : entity work.zaxxon_map_1
+--port map(
+-- clk  => clock_vidn,
+-- addr => map_addr,
+-- data => map1_do
+--);
+
+map_1_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 14) = "101" else '0'; -- 14000-17FFF
+
+map_tile_1 : entity work.dpram
+generic map( dWidth => 8, aWidth => 14)
 port map(
- clk  => clock_vidn,
- addr => map_addr,
- data => map1_do
+ clk_a  => clock_vidn,
+ addr_a => map_addr,
+ q_a    => map1_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(13 downto 0),
+ we_b   => map_1_rom_we,
+ d_b    => dl_data
 );
 
 -- map tile ROM 2
-map_tile_2 : entity work.zaxxon_map_2
+--map_tile_2 : entity work.zaxxon_map_2
+--port map(
+-- clk  => clock_vidn,
+-- addr => map_addr,
+-- data => map2_do
+--);
+
+map_2_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 14) = "110" else '0'; -- 18000-1BFFF
+
+map_tile_2 : entity work.dpram
+generic map( dWidth => 8, aWidth => 14)
 port map(
- clk  => clock_vidn,
- addr => map_addr,
- data => map2_do
+ clk_a  => clock_vidn,
+ addr_a => map_addr,
+ q_a    => map2_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(13 downto 0),
+ we_b   => map_2_rom_we,
+ d_b    => dl_data
 );
 
 -- background graphics ROM 1
-bg_graphics_bits_1 : entity work.zaxxon_bg_bits_1
+--bg_graphics_bits_1 : entity work.zaxxon_bg_bits_1
+--port map(
+-- clk  => clock_vidn,
+-- addr => bg_graphics_addr,
+-- data => bg_graphics1_do
+--);
+
+bg_1_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 13) = "0011" else '0'; -- 06000-07FFF
+
+bg_graphics_bits_1 : entity work.dpram
+generic map( dWidth => 8, aWidth => 13)
 port map(
- clk  => clock_vidn,
- addr => bg_graphics_addr,
- data => bg_graphics1_do
+ clk_a  => clock_vidn,
+ addr_a => bg_graphics_addr,
+ q_a    => bg_graphics1_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(12 downto 0),
+ we_b   => bg_1_rom_we,
+ d_b    => dl_data
 );
 
 -- background graphics ROM 2
-bg_graphics_bits_2 : entity work.zaxxon_bg_bits_2
+--bg_graphics_bits_2 : entity work.zaxxon_bg_bits_2
+--port map(
+-- clk  => clock_vidn,
+-- addr => bg_graphics_addr,
+-- data => bg_graphics2_do
+--);
+
+bg_2_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 13) = "0100" else '0'; -- 08000-09FFF
+
+bg_graphics_bits_2 : entity work.dpram
+generic map( dWidth => 8, aWidth => 13)
 port map(
- clk  => clock_vidn,
- addr => bg_graphics_addr,
- data => bg_graphics2_do
+ clk_a  => clock_vidn,
+ addr_a => bg_graphics_addr,
+ q_a    => bg_graphics2_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(12 downto 0),
+ we_b   => bg_2_rom_we,
+ d_b    => dl_data
 );
 
 -- background graphics ROM 3
-bg_graphics_bits_3 : entity work.zaxxon_bg_bits_3
+--bg_graphics_bits_3 : entity work.zaxxon_bg_bits_3
+--port map(
+-- clk  => clock_vidn,
+-- addr => bg_graphics_addr,
+-- data => bg_graphics3_do
+--);
+
+bg_3_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 13) = "0101" else '0'; -- 0A000-0BFFF
+
+bg_graphics_bits_3 : entity work.dpram
+generic map( dWidth => 8, aWidth => 13)
 port map(
- clk  => clock_vidn,
- addr => bg_graphics_addr,
- data => bg_graphics3_do
+ clk_a  => clock_vidn,
+ addr_a => bg_graphics_addr,
+ q_a    => bg_graphics3_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(12 downto 0),
+ we_b   => bg_3_rom_we,
+ d_b    => dl_data
 );
 
 -- sprite graphics ROM 1
-sp_graphics_bits_1 : entity work.zaxxon_sp_bits_1
+--sp_graphics_bits_1 : entity work.zaxxon_sp_bits_1
+--port map(
+-- clk  => clock_vidn,
+-- addr => sp_graphics_addr,
+-- data => sp_graphics1_do
+--);
+
+sp_1_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 13) = "0110" else '0'; -- 0C000-0DFFF
+
+sp_graphics_bits_1 : entity work.dpram
+generic map( dWidth => 8, aWidth => 13)
 port map(
- clk  => clock_vidn,
- addr => sp_graphics_addr,
- data => sp_graphics1_do
+ clk_a  => clock_vidn,
+ addr_a => sp_graphics_addr,
+ q_a    => sp_graphics1_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(12 downto 0),
+ we_b   => sp_1_rom_we,
+ d_b    => dl_data
 );
 
 -- sprite graphics ROM 2
-sp_graphics_bits_2 : entity work.zaxxon_sp_bits_2
+--sp_graphics_bits_2 : entity work.zaxxon_sp_bits_2
+--port map(
+-- clk  => clock_vidn,
+-- addr => sp_graphics_addr,
+-- data => sp_graphics2_do
+--);
+
+sp_2_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 13) = "0111" else '0'; -- 0E000-0FFFF
+
+sp_graphics_bits_2 : entity work.dpram
+generic map( dWidth => 8, aWidth => 13)
 port map(
- clk  => clock_vidn,
- addr => sp_graphics_addr,
- data => sp_graphics2_do
+ clk_a  => clock_vidn,
+ addr_a => sp_graphics_addr,
+ q_a    => sp_graphics2_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(12 downto 0),
+ we_b   => sp_2_rom_we,
+ d_b    => dl_data
 );
 
 -- sprite graphics ROM 3
-sp_graphics_bits_3 : entity work.zaxxon_sp_bits_3
-port map(
- clk  => clock_vidn,
- addr => sp_graphics_addr,
- data => sp_graphics3_do
-);
+--sp_graphics_bits_3 : entity work.zaxxon_sp_bits_3
+--port map(
+-- clk  => clock_vidn,
+-- addr => sp_graphics_addr,
+-- data => sp_graphics3_do
+--);
 
+sp_3_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 13) = "1000" else '0'; -- 10000-11FFF
+
+sp_graphics_bits_3 : entity work.dpram
+generic map( dWidth => 8, aWidth => 13)
+port map(
+ clk_a  => clock_vidn,
+ addr_a => sp_graphics_addr,
+ q_a    => sp_graphics3_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(12 downto 0),
+ we_b   => sp_3_rom_we,
+ d_b    => dl_data
+);
 
 --zaxxon_sound_board 
 --sound_board : entity work.tron_sound_board
@@ -997,20 +1175,53 @@ port map(
 -- dbg_cpu_addr => open --dbg_cpu_addr
 --);
 
+
+-- signal palette_rom_we : std_logic;
+-- signal ch_color_rom_we : std_logic;
+
+
 -- char color
-char_color: entity work.zaxxon_char_color
+--char_color: entity work.zaxxon_char_color
+--port map(
+-- clk  => clock_vidn,
+-- addr => ch_color_addr,
+-- data => ch_color_do
+--);
+
+ch_color_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 8) = "111000001" else '0'; -- 1C100-1C1FF
+
+char_color: entity work.dpram
+generic map( dWidth => 8, aWidth => 8)
 port map(
- clk  => clock_vidn,
- addr => ch_color_addr,
- data => ch_color_do
+ clk_a  => clock_vidn,
+ addr_a => ch_color_addr,
+ q_a    => ch_color_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(7 downto 0),
+ we_b   => ch_color_rom_we,
+ d_b    => dl_data
 );
  
 -- palette
-palette : entity work.zaxxon_palette
+--palette : entity work.zaxxon_palette
+--port map(
+-- clk  => clock_vidn,
+-- addr => palette_addr,
+-- data => palette_do
+--);
+
+palette_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 8) = "111000000" else '0'; -- 1C000-1C0FF
+
+palette: entity work.dpram
+generic map( dWidth => 8, aWidth => 8)
 port map(
- clk  => clock_vidn,
- addr => palette_addr,
- data => palette_do
+ clk_a  => clock_vidn,
+ addr_a => palette_addr,
+ q_a    => palette_do,
+ clk_b  => clock_vid,
+ addr_b => dl_addr(7 downto 0),
+ we_b   => palette_rom_we,
+ d_b    => dl_data
 );
 
 end struct;
