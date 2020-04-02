@@ -2,4 +2,5 @@ set_global_assignment -name QIP_FILE rtl/T80/T80.qip
 set_global_assignment -name VHDL_FILE rtl/gen_ram.vhd
 set_global_assignment -name VHDL_FILE rtl/dpram.vhd
 set_global_assignment -name VHDL_FILE rtl/zaxxon.vhd
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sdram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE Arcade-Zaxxon.sv

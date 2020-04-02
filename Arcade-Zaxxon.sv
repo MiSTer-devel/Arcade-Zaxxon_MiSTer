@@ -77,6 +77,20 @@ module emu
 	output [15:0] AUDIO_R,
 	output        AUDIO_S,    // 1 - signed audio samples, 0 - unsigned
 
+	
+	//SDRAM interface with lower latency
+	output        SDRAM_CLK,
+	output        SDRAM_CKE,
+	output [12:0] SDRAM_A,
+	output  [1:0] SDRAM_BA,
+	inout  [15:0] SDRAM_DQ,
+	output        SDRAM_DQML,
+	output        SDRAM_DQMH,
+	output        SDRAM_nCS,
+	output        SDRAM_nCAS,
+	output        SDRAM_nRAS,
+	output        SDRAM_nWE, 
+
 	// Open-drain User port.
 	// 0 - D+/RX
 	// 1 - D-/TX
@@ -97,7 +111,7 @@ assign HDMI_ARY = status[1] ? 8'd9  : status[2] ? 8'd3 : 8'd4;
 
 `include "build_id.v" 
 localparam CONF_STR = {
-	"A.ZAXXON;;",
+	"ZAXXON;;",
 	"O1,Aspect Ratio,Original,Wide;",
 	"O2,Orientation,Vert,Horz;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
@@ -112,14 +126,14 @@ localparam CONF_STR = {
 
 ////////////////////   CLOCKS   ///////////////////
 
-wire clk_sys, clk_48m;
+wire clk_sys, clk_48m, pll_locked;
 pll pll
 (
 	.refclk(CLK_50M),
 	.rst(0),
 	.outclk_0(clk_sys), // 24M
-	.outclk_1(clk_48m)
-
+	.outclk_1(clk_48m),
+	.locked(pll_locked)  
 );
 
 ///////////////////////////////////////////////////
@@ -327,15 +341,29 @@ zaxxon zaxxon
 	.sw2_input(8'h33), // coin b(4) / coin a(4)  -- "3" => 1c_1c
 
 	.service(1'b0),
-	.flip_screen(1'b1)
+	.flip_screen(1'b1),
+	
+	.wave_data(SDRAM_DQ),
+	.wave_addr(wave_addr),
+	.wave_rd(wave_rd)
 );
 
-wire ce_pix_old;
+//wire ce_pix_old;
 wire hs, vs, cs;
 wire hblank, vblank;
 wire [2:0] r,g;
 wire [1:0] b;
 wire ce_pix;
+
+// dev - bypass arcade_video
+//assign VGA_CLK = clk_sys;
+//assign VGA_CE = ce_pix;
+//assign VGA_R = {r, 4'b0000};
+//assign VGA_G = {g, 4'b0000};
+//assign VGA_B = {b, 5'b00000};
+//assign VGA_HS = hs;
+//assign VGA_VS = vs;
+//assign VGA_DE = ~(vblank | hblank);
 
 arcade_video #(256,224,8) arcade_video
 (
@@ -355,6 +383,34 @@ arcade_video #(256,224,8) arcade_video
 
 assign AUDIO_L = { audio_l };
 assign AUDIO_R = { audio_r };
-assign AUDIO_S = 0;
+assign AUDIO_S = 1;
+
+assign SDRAM_CLK = ~clk_48m;
+assign SDRAM_CKE = 1'b1;
+	
+wire [19:0] wave_addr;
+wire        wave_rd;	
+	
+sdram sdram
+(
+ .sd_data(SDRAM_DQ),
+ .sd_addr(SDRAM_A),
+ .sd_dqm({SDRAM_DQMH, SDRAM_DQML}),
+ .sd_ba(SDRAM_BA),
+ .sd_cs(SDRAM_nCS),
+ .sd_we(SDRAM_nWE),
+ .sd_ras(SDRAM_nRAS),
+ .sd_cas(SDRAM_nCAS),
+
+ .init(~pll_locked),
+ .clk(clk_48m),
+	
+ .addr(ioctl_download ? ioctl_addr :{5'b0,wave_addr}),
+ .we(ioctl_download && ioctl_wr && (ioctl_index==1)),
+ .di(ioctl_dout),
+ 
+ .rd(ioctl_download ? 0 : wave_rd) 
+);
+
 
 endmodule
