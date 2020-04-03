@@ -356,7 +356,7 @@ architecture struct of zaxxon is
  signal snd_continus : snd_flag_t := (
 		'0','0','0','0','0','0','0','0','0','0','0','0');
  -- sound sample rate 44/22kHz
- signal snd_44k : snd_flag_t := (
+ constant snd_44k : snd_flag_t := (
 		'1','1','1','1','1','1','1','0','1','1','1','1');
 		
  -- divide 44kHz flag
@@ -742,7 +742,7 @@ begin
 				sp_graphics_addr <= sp_code_line;
 				sp_ok <= sp_online_ram_do(8);
 				sp_hflip <= sp_code(6);
-				sp_vflip <= sp_code(7);
+				--sp_vflip <= sp_code(7);
 				if sp_code(6) = '1' then sp_bit_nb <= 0; else sp_bit_nb <= 7; end if;
 				sp_color_r <= sp_color;
 			end if;
@@ -983,10 +983,13 @@ begin
 			-- clip audio
 			if  audio_r(19 downto 2) > 32767 then
 				audio_out_l <= x"7FFF";
+				audio_out_r <= x"7FFF";
 			elsif	audio_r(19 downto 2) < -32768 then 
 				audio_out_l <= x"8000";
+				audio_out_r <= x"8000";
 			else
 				audio_out_l <= std_logic_vector(audio_r(17 downto 2));
+				audio_out_r <= std_logic_vector(audio_r(17 downto 2));
 			end if;
 
 			-- sdram read trigger (and auto refresh period)
@@ -1058,10 +1061,10 @@ port map(
   INT_n   => cpu_irq_n,
   NMI_n   => '1', --cpu_nmi_n,
   BUSRQ_n => '1',
-  M1_n    => cpu_m1_n,
+  --M1_n    => cpu_m1_n,
   MREQ_n  => cpu_mreq_n,
-  IORQ_n  => cpu_ioreq_n,
-  RD_n    => cpu_rd_n,
+  --IORQ_n  => cpu_ioreq_n,
+  --RD_n    => cpu_rd_n,
   WR_n    => cpu_wr_n,
   RFSH_n  => open,
   HALT_n  => open,

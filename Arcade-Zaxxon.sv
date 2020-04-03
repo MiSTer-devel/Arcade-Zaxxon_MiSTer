@@ -112,15 +112,16 @@ assign HDMI_ARY = status[1] ? 8'd9  : status[2] ? 8'd3 : 8'd4;
 `include "build_id.v" 
 localparam CONF_STR = {
 	"ZAXXON;;",
-	"O1,Aspect Ratio,Original,Wide;",
-	"O2,Orientation,Vert,Horz;",
+	"-;",
+	"H0O1,Aspect Ratio,Original,Wide;",
+	"H0O2,Orientation,Vert,Horz;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
 	"DIP;",
 	"-;",
 	"R0,Reset;",
-	"J1,Fire 1,Start 1P,Start 2P,Coin;",
-	"jn,A,B,Start,Select,R;",
+	"J1,Fire,Start 1P,Start 2P,Coin;",
+	"jn,A,Start,Select,R;",
 	"V,v",`BUILD_DATE
 };
 
@@ -167,6 +168,8 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 
 	.buttons(buttons),
 	.status(status),
+	.status_menumask({direct_video}),
+
 	.forced_scandoubler(forced_scandoubler),
 	.gamma_bus(gamma_bus),
 	.direct_video(direct_video),
@@ -258,9 +261,9 @@ reg btn_fire2A = 0;
 //reg btn_fire2D = 0;
 
 
-wire m_start1  = btn_start1 | joy[6];
-wire m_start2  = btn_start2 | joy[7];
-wire m_coin1   = btn_coin1  | btn_coin2 | joy[8];
+wire m_start1  = btn_start1 | joy[5];
+wire m_start2  = btn_start2 | joy[6];
+wire m_coin1   = btn_coin1  | btn_coin2 | joy[7];
 
 wire m_right1  = btn_right  | joy1[0];
 wire m_left1   = btn_left   | joy1[1];
@@ -311,7 +314,7 @@ zaxxon zaxxon
 	.video_hs(hs),
 	.video_vs(vs),
 //	.video_csync(cs),
-	.video_ce(ce_pix),
+//	.video_ce(ce_pix),
 //	.tv15Khz_mode(~status[3]),
 	.audio_out_l(audio_l),
 	.audio_out_r(audio_r),
@@ -353,7 +356,6 @@ wire hs, vs, cs;
 wire hblank, vblank;
 wire [2:0] r,g;
 wire [1:0] b;
-wire ce_pix;
 
 // dev - bypass arcade_video
 //assign VGA_CLK = clk_sys;
@@ -365,11 +367,19 @@ wire ce_pix;
 //assign VGA_VS = vs;
 //assign VGA_DE = ~(vblank | hblank);
 
+reg ce_pix;
+always @(posedge clk_48m) begin
+	reg [2:0] div;
+	
+	div <= div + 1'd1;
+	ce_pix <= !div;
+end
+
 arcade_video #(256,224,8) arcade_video
 (
 	.*,
 
-	.clk_video(clk_sys),
+	.clk_video(clk_48m),
 	.RGB_in({r,g,b}),
 	.HBlank(hblank),
 	.VBlank(vblank),
