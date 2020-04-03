@@ -335,12 +335,12 @@ architecture struct of zaxxon is
  signal snd_addrs : snd_addr_t;  
  
  -- wave start addresses in sdram 
- signal snd_starts : snd_addr_t := (
+ constant snd_starts : snd_addr_t := (
 		x"0002C",x"0756A",x"0BB1C",x"1B3B4",x"251C4",x"354E6",
 		x"42FF8",x"5C918",x"85D4E",x"AB79A",x"AC7E6",x"AE2D8");
 		
  -- wave end addresses in sdram 
- signal snd_stops : snd_addr_t := (
+ constant snd_stops : snd_addr_t := (
 		x"0753E",x"0BAF0",x"1B388",x"25198",x"354BA",x"42FCC",
 		x"5C8EC",x"85D22",x"AB76E",x"AC7BA",x"AE2AC",x"C369A");
 

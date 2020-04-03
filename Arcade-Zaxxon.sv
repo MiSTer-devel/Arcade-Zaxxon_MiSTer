@@ -346,7 +346,7 @@ zaxxon zaxxon
 	.service(1'b0),
 	.flip_screen(1'b1),
 	
-	.wave_data(SDRAM_DQ),
+	.wave_data(wave_data),
 	.wave_addr(wave_addr),
 	.wave_rd(wave_rd)
 );
@@ -395,31 +395,23 @@ assign AUDIO_L = { audio_l };
 assign AUDIO_R = { audio_r };
 assign AUDIO_S = 1;
 
-assign SDRAM_CLK = ~clk_48m;
-assign SDRAM_CKE = 1'b1;
-	
 wire [19:0] wave_addr;
+wire [15:0] wave_data;
 wire        wave_rd;	
 	
 sdram sdram
 (
- .sd_data(SDRAM_DQ),
- .sd_addr(SDRAM_A),
- .sd_dqm({SDRAM_DQMH, SDRAM_DQML}),
- .sd_ba(SDRAM_BA),
- .sd_cs(SDRAM_nCS),
- .sd_we(SDRAM_nWE),
- .sd_ras(SDRAM_nRAS),
- .sd_cas(SDRAM_nCAS),
+	.*,
+	.init(~pll_locked),
+	.clk(clk_48m),
 
- .init(~pll_locked),
- .clk(clk_48m),
-	
- .addr(ioctl_download ? ioctl_addr :{5'b0,wave_addr}),
- .we(ioctl_download && ioctl_wr && (ioctl_index==1)),
- .di(ioctl_dout),
- 
- .rd(ioctl_download ? 0 : wave_rd) 
+	.addr(ioctl_download ? ioctl_addr :{5'b0,wave_addr}),
+	.we(ioctl_download && ioctl_wr && (ioctl_index==1)),
+	.rd(~ioctl_download & wave_rd),
+	.din(ioctl_dout),
+	.dout(wave_data),
+
+	.ready()
 );
 
 
