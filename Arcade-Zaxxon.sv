@@ -267,8 +267,8 @@ wire m_coin1   = btn_coin1  | btn_coin2 | joy[7];
 
 wire m_right1  = btn_right  | joy1[0];
 wire m_left1   = btn_left   | joy1[1];
-wire m_down1   = btn_down   | joy1[2];
-wire m_up1     = btn_up     | joy1[3];
+wire m_down1   = btn_down   | joy1[3];
+wire m_up1     = btn_up     | joy1[2];
 wire m_fire1a  = btn_fireA  | joy1[4];
 //wire m_fire1b  = btn_fireB  | joy1[5];
 //wire m_fire1c  = btn_fireC  | joy1[6];
@@ -276,8 +276,8 @@ wire m_fire1a  = btn_fireA  | joy1[4];
 
 wire m_right2  = btn_right2 | joy2[0];
 wire m_left2   = btn_left2  | joy2[1];
-wire m_down2   = btn_down2  | joy2[2];
-wire m_up2     = btn_up2    | joy2[3];
+wire m_down2   = btn_down2  | joy2[3];
+wire m_up2     = btn_up2    | joy2[2];
 wire m_fire2a  = btn_fire2A | joy2[4];
 //wire m_fire2b  = btn_fire2B | joy2[5];
 //wire m_fire2c  = btn_fire2C | joy2[6];
