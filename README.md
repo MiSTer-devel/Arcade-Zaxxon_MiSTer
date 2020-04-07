@@ -1,4 +1,4 @@
-# Nintendo Zaxxon port for MiSTer
+# Sega/Gremlin Zaxxon port for MiSTer
 
 # Keyboard inputs :
 ```
