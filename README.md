@@ -25,13 +25,22 @@
 ```
                                 *** Attention ***
 
-ROM is not included. In order to use this arcade, you need to provide a correct ROM file.
+ROMs are not included. In order to use this arcade, you need to provide the
+correct ROMs.
 
-Find this zip file somewhere. You need to find the file exactly as required.
-Do not rename other zip files even if they also represent the same game - they are not compatible!
-The name of zip is taken from M.A.M.E. project, so you can get more info about
-hashes and contained files there.
-Put rom on your SD card. Example directory : _Arcade/mame/
+To simplify the process .mra files are provided in the releases folder, that
+specifies the required ROMs with checksums. The ROMs .zip filename refers to the
+corresponding file of the M.A.M.E. project.
+
+Please refer to https://github.com/MiSTer-devel/Main_MiSTer/wiki/Arcade-Roms for
+information on how to setup and use the environment.
+
+Quickreference for folders and file placement:
+
+/_Arcade/<game name>.mra
+/_Arcade/cores/<game rbf>.rbf
+/_Arcade/mame/<mame rom>.zip
+/_Arcade/hbmame/<hbmame rom>.zip
 
 ```
 
