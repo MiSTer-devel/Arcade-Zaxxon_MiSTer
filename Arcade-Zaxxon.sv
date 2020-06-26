@@ -119,6 +119,9 @@ localparam CONF_STR = {
 	"-;",
 	"DIP;",
 	"-;",
+	//"O6,Service,Off,On;",
+	//"O7,Flip,Off,On;",
+	//"-;",
 	"R0,Reset;",
 	"J1,Fire,Start 1P,Start 2P,Coin;",
 	"jn,A,Start,Select,R;",
@@ -196,6 +199,15 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 // load the DIPS
 reg [7:0] sw[8];
 always @(posedge clk_sys) if (ioctl_wr && (ioctl_index==254) && !ioctl_addr[24:3]) sw[ioctl_addr[2:0]] <= ioctl_dout;
+
+// load the game title
+reg [7:0] mod = 0;
+always @(posedge clk_sys) if (ioctl_wr & (ioctl_index==1)) mod <= ioctl_dout;
+
+localparam mod_zaxxon = 0;
+localparam mod_superzaxxon = 1;
+localparam mod_futurespy= 2;
+
 
 wire       pressed = ps2_key[9];
 wire [7:0] code    = ps2_key[7:0];
@@ -304,6 +316,8 @@ wire reset = status[0] | buttons[1] | rom_download;
 
 zaxxon zaxxon
 (
+	.mod_superzaxxon(mod==mod_superzaxxon),
+	.mod_futurespy(mod==mod_futurespy),
 	.clock_24(clk_sys),
 	.reset(reset),
 	.video_r(r),
@@ -406,7 +420,7 @@ sdram sdram
 	.clk(clk_48m),
 
 	.addr(ioctl_download ? ioctl_addr :{5'b0,wave_addr}),
-	.we(ioctl_download && ioctl_wr && (ioctl_index==1)),
+	.we(ioctl_download && ioctl_wr && (ioctl_index==2)),
 	.rd(~ioctl_download & wave_rd),
 	.din(ioctl_dout),
 	.dout(wave_data),

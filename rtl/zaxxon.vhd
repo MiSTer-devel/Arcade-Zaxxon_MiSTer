@@ -122,6 +122,8 @@ entity zaxxon is
 port(
  clock_24       : in std_logic;
  reset          : in std_logic;
+mod_superzaxxon : in std_logic;
+mod_futurespy   : in std_logic;
 -- tv15Khz_mode   : in std_logic;
  video_r        : out std_logic_vector(2 downto 0);
  video_g        : out std_logic_vector(2 downto 0);
@@ -321,6 +323,25 @@ architecture struct of zaxxon is
  signal port_a, port_a_r : std_logic_vector(7 downto 0); -- i8255 ports
  signal port_b, port_b_r : std_logic_vector(7 downto 0);
  signal port_c, port_c_r : std_logic_vector(7 downto 0);
+
+ signal cpu_rom_addr   : std_logic_vector(14 downto 0);
+
+ signal cpu_rom_dec : std_logic_vector(7 downto 0);
+ signal cpu_rom_dec_combined : std_logic_vector(7 downto 0);
+
+COMPONENT Sega_Crypt
+        PORT
+        (
+                mod_futurespy                   :        IN STD_LOGIC;
+                clk                             :        IN STD_LOGIC;
+                mrom_m1                 :        IN STD_LOGIC;
+                mrom_ad                 :        IN STD_LOGIC_VECTOR(14 DOWNTO 0);
+                mrom_dt                 :        OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
+                cpu_rom_addr    :        OUT STD_LOGIC_VECTOR(14 DOWNTO 0);
+                cpu_rom_do              :        IN STD_LOGIC_VECTOR(7 DOWNTO 0)
+        );
+END COMPONENT;
+
  
  signal wav_clk_cnt : std_logic_vector(11 downto 0); -- 44kHz divider / sound# counter
  
@@ -544,7 +565,7 @@ gen_input <= service & coin2_mem & coin1_mem & '0' & start2 & start1 & "00";
 ------------------------------------------
 -- cpu data input with address decoding --
 ------------------------------------------
-cpu_di <= cpu_rom_do       when cpu_mreq_n = '0' and cpu_addr(15 downto 12) < X"6" else -- 0000-5FFF
+cpu_di <= cpu_rom_dec_combined       when cpu_mreq_n = '0' and cpu_addr(15 downto 12) < X"6" else -- 0000-5FFF
 			 wram_do          when cpu_mreq_n = '0' and cpu_addr(15 downto 12) = x"6" else -- 6000-6FFF
 			 ch_ram_do_to_cpu when cpu_mreq_n = '0' and (cpu_addr and x"E000") = x"8000" else -- video ram   8000-83FF + mirroring 1C00
 			 sp_ram_do_to_cpu when cpu_mreq_n = '0' and (cpu_addr and x"E000") = x"A000" else -- sprite ram  A000-A0FF + mirroring 1F00
@@ -1061,7 +1082,7 @@ port map(
   INT_n   => cpu_irq_n,
   NMI_n   => '1', --cpu_nmi_n,
   BUSRQ_n => '1',
-  --M1_n    => cpu_m1_n,
+  M1_n    => cpu_m1_n,
   MREQ_n  => cpu_mreq_n,
   --IORQ_n  => cpu_ioreq_n,
   --RD_n    => cpu_rd_n,
@@ -1081,6 +1102,17 @@ port map(
 -- addr => cpu_addr(14 downto 0),
 -- data => cpu_rom_do
 --);
+cpu_rom_dec_combined <= cpu_rom_dec when (mod_superzaxxon = '1' or mod_futurespy = '1')  else cpu_rom_do;
+crypt_rom_cpu : Sega_Crypt
+port map(
+        clk                     => clock_vidn,
+	mod_futurespy => mod_futurespy,
+        mrom_m1                 => not cpu_m1_n,
+        mrom_ad         => cpu_addr(14 downto 0),
+        mrom_dt         => cpu_rom_dec,
+        cpu_rom_addr=> cpu_rom_addr,
+        cpu_rom_do  => cpu_rom_do
+);
 
 cpu_rom_we <= '1' when dl_wr = '1' and dl_addr(16 downto 12) < "00101" else '0'; -- 00000-04FFF
 
@@ -1088,7 +1120,7 @@ rom_cpu : entity work.dpram
 generic map( dWidth => 8, aWidth => 15)
 port map(
  clk_a  => clock_vidn,
- addr_a => cpu_addr(14 downto 0),
+ addr_a => cpu_rom_addr,
  q_a    => cpu_rom_do,
  clk_b  => clock_vid,
  addr_b => dl_addr(14 downto 0),
