@@ -32,11 +32,15 @@ module emu
 	inout  [45:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
-	output        VGA_CLK,
+	output        CLK_VIDEO,
 
-	//Multiple resolutions are supported using different VGA_CE rates.
+	//Multiple resolutions are supported using different CE_PIXEL rates.
 	//Must be based on CLK_VIDEO
-	output        VGA_CE,
+	output        CE_PIXEL,
+
+	//Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
+	output [11:0] VIDEO_ARX,
+	output [11:0] VIDEO_ARY,
 
 	output  [7:0] VGA_R,
 	output  [7:0] VGA_G,
@@ -45,25 +49,33 @@ module emu
 	output        VGA_VS,
 	output        VGA_DE,    // = ~(VBlank | HBlank)
 	output        VGA_F1,
+	output [1:0]  VGA_SL,
+	output        VGA_SCALER, // Force VGA scaler
 
-	//Base video clock. Usually equals to CLK_SYS.
-	output        HDMI_CLK,
+	// Use framebuffer from DDRAM (USE_FB=1 in qsf)
+	// FB_FORMAT:
+	//    [2:0] : 011=8bpp(palette) 100=16bpp 101=24bpp 110=32bpp
+	//    [3]   : 0=16bits 565 1=16bits 1555
+	//    [4]   : 0=RGB  1=BGR (for 16/24/32 modes)
+	//
+	// FB_STRIDE either 0 (rounded to 256 bytes) or multiple of 16 bytes.
+	output        FB_EN,
+	output  [4:0] FB_FORMAT,
+	output [11:0] FB_WIDTH,
+	output [11:0] FB_HEIGHT,
+	output [31:0] FB_BASE,
+	output [13:0] FB_STRIDE,
+	input         FB_VBL,
+	input         FB_LL,
+	output        FB_FORCE_BLANK,
 
-	//Multiple resolutions are supported using different HDMI_CE rates.
-	//Must be based on CLK_VIDEO
-	output        HDMI_CE,
-
-	output  [7:0] HDMI_R,
-	output  [7:0] HDMI_G,
-	output  [7:0] HDMI_B,
-	output        HDMI_HS,
-	output        HDMI_VS,
-	output        HDMI_DE,   // = ~(VBlank | HBlank)
-	output  [1:0] HDMI_SL,   // scanlines fx
-
-	//Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
-	output  [7:0] HDMI_ARX,
-	output  [7:0] HDMI_ARY,
+	// Palette control for 8bit modes.
+	// Ignored for other video modes.
+	output        FB_PAL_CLK,
+	output  [7:0] FB_PAL_ADDR,
+	output [23:0] FB_PAL_DOUT,
+	input  [23:0] FB_PAL_DIN,
+	output        FB_PAL_WR,
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
@@ -73,12 +85,25 @@ module emu
 	output  [1:0] LED_POWER,
 	output  [1:0] LED_DISK,
 
+	input         CLK_AUDIO, // 24.576 MHz
 	output [15:0] AUDIO_L,
 	output [15:0] AUDIO_R,
 	output        AUDIO_S,    // 1 - signed audio samples, 0 - unsigned
 
-	
-	//SDRAM interface with lower latency
+	//High latency DDR3 RAM interface
+	//Use for non-critical time purposes
+	output        DDRAM_CLK,
+	input         DDRAM_BUSY,
+	output  [7:0] DDRAM_BURSTCNT,
+	output [28:0] DDRAM_ADDR,
+	input  [63:0] DDRAM_DOUT,
+	input         DDRAM_DOUT_READY,
+	output        DDRAM_RD,
+	output [63:0] DDRAM_DIN,
+	output  [7:0] DDRAM_BE,
+	output        DDRAM_WE,
+
+`ifdef USE_SDRAM
 	output        SDRAM_CLK,
 	output        SDRAM_CKE,
 	output [12:0] SDRAM_A,
@@ -89,7 +114,8 @@ module emu
 	output        SDRAM_nCS,
 	output        SDRAM_nCAS,
 	output        SDRAM_nRAS,
-	output        SDRAM_nWE, 
+	output        SDRAM_nWE,
+`endif
 
 	// Open-drain User port.
 	// 0 - D+/RX
@@ -101,19 +127,24 @@ module emu
 );
 
 assign VGA_F1    = 0;
+assign VGA_SCALER= 0;
 assign USER_OUT  = '1;
 assign LED_USER  = rom_download;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
 
-assign HDMI_ARX = status[1] ? 8'd16 : status[2] ? 8'd4 : 8'd3;
-assign HDMI_ARY = status[1] ? 8'd9  : status[2] ? 8'd3 : 8'd4;
+assign {FB_PAL_CLK, FB_FORCE_BLANK, FB_PAL_ADDR, FB_PAL_DOUT, FB_PAL_WR} = '0;
+
+wire [1:0] ar = status[20:19];
+
+assign VIDEO_ARX = (!ar) ? ((status[2] ) ? 8'd4 : 8'd3) : (ar - 1'd1);
+assign VIDEO_ARY = (!ar) ? ((status[2] ) ? 8'd3 : 8'd4) : 12'd0;
 
 `include "build_id.v" 
 localparam CONF_STR = {
 	"ZAXXON;;",
 	"-;",
-	"H0O1,Aspect Ratio,Original,Wide;",
+	"H0OJK,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"H0O2,Orientation,Vert,Horz;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
@@ -148,8 +179,6 @@ wire        forced_scandoubler;
 wire        direct_video;
 
 wire [15:0] audio_l, audio_r;
-
-wire [10:0] ps2_key;
 
 wire [15:0] joy1, joy2, joy3, joy4;
 wire [15:0] joy = joy1 | joy2 | joy3 | joy4;
@@ -191,9 +220,8 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.joystick_analog_0(joy1a),
 	.joystick_analog_1(joy2a),
 	.joystick_analog_2(joy3a),
-	.joystick_analog_3(joy4a),
+	.joystick_analog_3(joy4a)
 
-	.ps2_key(ps2_key)
 );
 
 // load the DIPS
@@ -209,91 +237,27 @@ localparam mod_superzaxxon = 1;
 localparam mod_futurespy= 2;
 
 
-wire       pressed = ps2_key[9];
-wire [7:0] code    = ps2_key[7:0];
-always @(posedge clk_sys) begin
-	reg old_state;
-	old_state <= ps2_key[10];
-	
-	if(old_state != ps2_key[10]) begin
-		casex(code)
-			'h75: btn_up            <= pressed; // up
-			'h72: btn_down          <= pressed; // down
-			'h6B: btn_left          <= pressed; // left
-			'h74: btn_right         <= pressed; // right
-			'h76: btn_coin1         <= pressed; // ESC
-			'h05: btn_start1        <= pressed; // F1
-			'h06: btn_start2        <= pressed; // F2
-			'h14: btn_fireA         <= pressed; // lctrl
-			//'h11: btn_fireB         <= pressed; // lalt
-			//'h29: btn_fireC         <= pressed; // Space
-			// JPAC/IPAC/MAME Style Codes
-			'h16: btn_start1        <= pressed; // 1
-			'h1E: btn_start2        <= pressed; // 2
-			//'h26: btn_start3        <= pressed; // 3
-			//'h25: btn_start4        <= pressed; // 4
-			'h2E: btn_coin1         <= pressed; // 5
-			'h36: btn_coin2         <= pressed; // 6
-			//'h3D: btn_coin3         <= pressed; // 7
-			//'h3E: btn_coin4         <= pressed; // 8
-			'h2D: btn_up2           <= pressed; // R
-			'h2B: btn_down2         <= pressed; // F
-			'h23: btn_left2         <= pressed; // D
-			'h34: btn_right2        <= pressed; // G
-			'h1C: btn_fire2A        <= pressed; // A
-			//'h1B: btn_fire2B        <= pressed; // S
-			//'h21: btn_fire2C        <= pressed; // Q
-			//'h1D: btn_fire2D        <= pressed; // W
-			//'h1D: btn_fire2E        <= pressed; // W
-			//'h1D: btn_fire2F        <= pressed; // W
-			//'h1D: btn_tilt          <= pressed; // W
-		endcase
-	end
-end
+wire m_start1  = joy[5];
+wire m_start2  = joy[6];
+wire m_coin1   = joy[7];
 
-reg btn_left   = 0;
-reg btn_right  = 0;
-reg btn_down   = 0;
-reg btn_up     = 0;
-reg btn_fireA  = 0;
-//reg btn_fireB  = 0;
-//reg btn_fireC  = 0;
-//reg btn_fireD  = 0;
-reg btn_coin1  = 0;
-reg btn_coin2  = 0;
-reg btn_start1 = 0;
-reg btn_start2 = 0;
-reg btn_up2    = 0;
-reg btn_down2  = 0;
-reg btn_left2  = 0;
-reg btn_right2 = 0;
-reg btn_fire2A = 0;
-//reg btn_fire2B = 0;
-//reg btn_fire2C = 0;
-//reg btn_fire2D = 0;
+wire m_right1  = joy1[0];
+wire m_left1   = joy1[1];
+wire m_down1   = joy1[3];
+wire m_up1     = joy1[2];
+wire m_fire1a  = joy1[4];
+//wire m_fire1b  = joy1[5];
+//wire m_fire1c  = joy1[6];
+//wire m_fire1d  = joy1[7];
 
-
-wire m_start1  = btn_start1 | joy[5];
-wire m_start2  = btn_start2 | joy[6];
-wire m_coin1   = btn_coin1  | btn_coin2 | joy[7];
-
-wire m_right1  = btn_right  | joy1[0];
-wire m_left1   = btn_left   | joy1[1];
-wire m_down1   = btn_down   | joy1[3];
-wire m_up1     = btn_up     | joy1[2];
-wire m_fire1a  = btn_fireA  | joy1[4];
-//wire m_fire1b  = btn_fireB  | joy1[5];
-//wire m_fire1c  = btn_fireC  | joy1[6];
-//wire m_fire1d  = btn_fireD  | joy1[7];
-
-wire m_right2  = btn_right2 | joy2[0];
-wire m_left2   = btn_left2  | joy2[1];
-wire m_down2   = btn_down2  | joy2[3];
-wire m_up2     = btn_up2    | joy2[2];
-wire m_fire2a  = btn_fire2A | joy2[4];
-//wire m_fire2b  = btn_fire2B | joy2[5];
-//wire m_fire2c  = btn_fire2C | joy2[6];
-//wire m_fire2d  = btn_fire2D | joy2[7];
+wire m_right2  = joy2[0];
+wire m_left2   = joy2[1];
+wire m_down2   = joy2[3];
+wire m_up2     = joy2[2];
+wire m_fire2a  = joy2[4];
+//wire m_fire2b  = joy2[5];
+//wire m_fire2c  = joy2[6];
+//wire m_fire2d  = joy2[7];
 
 wire m_right   = m_right1 | m_right2;
 wire m_left    = m_left1  | m_left2; 
@@ -389,7 +353,11 @@ always @(posedge clk_48m) begin
 	ce_pix <= !div;
 end
 
-arcade_video #(256,224,8) arcade_video
+wire rotate_ccw = 0;
+wire no_rotate = status[2] | direct_video  ;
+screen_rotate screen_rotate (.*);
+
+arcade_video #(256,8) arcade_video
 (
 	.*,
 
@@ -400,8 +368,6 @@ arcade_video #(256,224,8) arcade_video
 	.HSync(hs),
 	.VSync(vs),
 
-	.no_rotate(status[2] | direct_video),
-	.rotate_ccw(1'b0),
 	.fx(status[5:3])
 );
 
