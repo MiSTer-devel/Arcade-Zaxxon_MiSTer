@@ -19,7 +19,7 @@
         <rom index="1">
                 <part>01</part>
         </rom>
-	<rom index="0" zip="szaxxon.zip" md5="c07ad36e13e21c81f54e0357665f42ff">
+	<rom index="0" zip="szaxxon.zip" md5="none">
 		<part crc="af7221da" name="1804e.u27"/>
 		<part crc="1b90fb2a" name="1803e.u28"/>
 		<part crc="07258b4a" name="1802e.u29"/>
@@ -28,6 +28,10 @@
 		<part crc="f51af375" name="1807b.u113"/>
 		<part crc="a7de021d" name="1806b.u112"/>
 		<part crc="5bfb3b04" name="1805b.u111"/>
+		<part crc="1503ae41" name="1812e.u77"/>
+		<part crc="3b53d83f" name="1813e.u78"/>
+		<part crc="581e8793" name="1814e.u79"/>
+		<part crc="581e8793" name="1814e.u79"/>
 		<part crc="1503ae41" name="1812e.u77"/>
 		<part crc="3b53d83f" name="1813e.u78"/>
 		<part crc="581e8793" name="1814e.u79"/>

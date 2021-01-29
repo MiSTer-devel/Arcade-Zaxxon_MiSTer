@@ -297,7 +297,7 @@ zaxxon zaxxon
 	.audio_out_l(audio_l),
 	.audio_out_r(audio_r),
 
-	.dl_addr(ioctl_addr[16:0]),
+	.dl_addr(ioctl_addr[17:0]),
 	.dl_wr(ioctl_wr&rom_download),
 	.dl_data(ioctl_dout),
 
