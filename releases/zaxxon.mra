@@ -10,15 +10,15 @@
 	<rbf>zaxxon</rbf>
 
 	<switches default="7F">
-		<dip bits="0,1"    name="Extra ship" ids="40.000,20.000,30.000,10.000"/>
-		<dip bits="4,5"    name="Lives" ids="Free ships,4,5,3"/>
-		<dip bits="6"      name="Sound" ids="Off,On"/>
-		<dip bits="7"      name="Cabinet" ids="Upright,Cocktail"/>
+		<dip bits="0,1"		name="Extra ship"	ids="40.000,20.000,30.000,10.000"/>
+		<dip bits="4,5"		name="Lives"		ids="Free ships,4,5,3"/>
+		<dip bits="6"		name="Sound"		ids="Off,On"/>
+		<dip bits="7"		name="Cabinet"		ids="Upright,Cocktail"/>
 	</switches>
 	<buttons names="Fire,Start 1P,Start 2P,Coin" default="A,Start,Select,R"/>
-        <rom index="1">
-                <part>00</part>
-        </rom>
+	<rom index="1">
+		<part>00</part>
+	</rom>
 	<rom index="0" zip="zaxxon.zip" md5="none">
 		<part crc="6e2b4a30" name="zaxxon_rom3d.u27"/>
 		<part crc="1c9ea398" name="zaxxon_rom2d.u28"/>
@@ -50083,4 +50083,11 @@ FF FF 00 00 FF FF 00 00 FF FF 00 00 FF FF FF FF
 FF FF FF FF 00 00 01 00 00 00 00 00 01 00 
 		</part>
 	</rom>
+	<rom index="3" md5="none">
+		<part>
+		 00 00 61 00 7E 90 81 00 
+		 00 00 60 38 03 00 00 00 
+		</part>
+   </rom>
+   <nvram index="4" size="129"/>
 </misterromdescription>

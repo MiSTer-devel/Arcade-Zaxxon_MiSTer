@@ -52,13 +52,14 @@ module emu
 	output [1:0]  VGA_SL,
 	output        VGA_SCALER, // Force VGA scaler
 
-	// Use framebuffer from DDRAM (USE_FB=1 in qsf)
+`ifdef USE_FB
+	// Use framebuffer in DDRAM (USE_FB=1 in qsf)
 	// FB_FORMAT:
 	//    [2:0] : 011=8bpp(palette) 100=16bpp 101=24bpp 110=32bpp
 	//    [3]   : 0=16bits 565 1=16bits 1555
 	//    [4]   : 0=RGB  1=BGR (for 16/24/32 modes)
 	//
-	// FB_STRIDE either 0 (rounded to 256 bytes) or multiple of 16 bytes.
+	// FB_STRIDE either 0 (rounded to 256 bytes) or multiple of pixel size (in bytes)
 	output        FB_EN,
 	output  [4:0] FB_FORMAT,
 	output [11:0] FB_WIDTH,
@@ -76,6 +77,7 @@ module emu
 	output [23:0] FB_PAL_DOUT,
 	input  [23:0] FB_PAL_DIN,
 	output        FB_PAL_WR,
+`endif
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
@@ -85,11 +87,18 @@ module emu
 	output  [1:0] LED_POWER,
 	output  [1:0] LED_DISK,
 
+	// I/O board button press simulation (active high)
+	// b[1]: user button
+	// b[0]: osd button
+	output  [1:0] BUTTONS,
+
 	input         CLK_AUDIO, // 24.576 MHz
 	output [15:0] AUDIO_L,
 	output [15:0] AUDIO_R,
-	output        AUDIO_S,    // 1 - signed audio samples, 0 - unsigned
+	output        AUDIO_S,   // 1 - signed audio samples, 0 - unsigned
+	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
 
+`ifdef USE_DDRAM
 	//High latency DDR3 RAM interface
 	//Use for non-critical time purposes
 	output        DDRAM_CLK,
@@ -102,8 +111,10 @@ module emu
 	output [63:0] DDRAM_DIN,
 	output  [7:0] DDRAM_BE,
 	output        DDRAM_WE,
+`endif
 
 `ifdef USE_SDRAM
+	//SDRAM interface with lower latency
 	output        SDRAM_CLK,
 	output        SDRAM_CKE,
 	output [12:0] SDRAM_A,
@@ -123,7 +134,9 @@ module emu
 	// 2..6 - USR2..USR6
 	// Set USER_OUT to 1 to read from USER_IN.
 	input   [6:0] USER_IN,
-	output  [6:0] USER_OUT
+	output  [6:0] USER_OUT,
+
+	input         OSD_STATUS
 );
 
 assign VGA_F1    = 0;
@@ -137,8 +150,8 @@ assign {FB_PAL_CLK, FB_FORCE_BLANK, FB_PAL_ADDR, FB_PAL_DOUT, FB_PAL_WR} = '0;
 
 wire [1:0] ar = status[20:19];
 
-assign VIDEO_ARX = (!ar) ? ((status[2] ) ? 8'd4 : 8'd3) : (ar - 1'd1);
-assign VIDEO_ARY = (!ar) ? ((status[2] ) ? 8'd3 : 8'd4) : 12'd0;
+assign VIDEO_ARX = (!ar) ? ((status[2]) ? 8'd4 : 8'd3) : (ar - 1'd1);
+assign VIDEO_ARY = (!ar) ? ((status[2]) ? 8'd3 : 8'd4) : 12'd0;
 
 `include "build_id.v" 
 localparam CONF_STR = {
@@ -150,12 +163,14 @@ localparam CONF_STR = {
 	"-;",
 	"DIP;",
 	"-;",
-	//"O6,Service,Off,On;",
-	//"O7,Flip,Off,On;",
-	//"-;",
+	"O6,Service,Off,On;",
+	"O7,Flip,Off,On;",
+	"-;",
+	"OF,High Score Save,Manual,Off;",
+	"-;",
 	"R0,Reset;",
-	"J1,Fire,Start 1P,Start 2P,Coin;",
-	"jn,A,Start,Select,R;",
+	"J1,Fire 1,Fire 2,Start 1P,Start 2P,Coin;",
+	"jn,A,B,Start,Select,R;",
 	"V,v",`BUILD_DATE
 };
 
@@ -207,10 +222,13 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.direct_video(direct_video),
 
 	.ioctl_download(ioctl_download),
+	.ioctl_upload(ioctl_upload),
 	.ioctl_wr(ioctl_wr),
 	.ioctl_addr(ioctl_addr),
 	.ioctl_dout(ioctl_dout),
+	.ioctl_din(ioctl_din),
 	.ioctl_index(ioctl_index),
+	.ioctl_wait(ioctl_wait),
 
 	.joystick_0(joy1),
 	.joystick_1(joy2),
@@ -243,38 +261,35 @@ wire m_coin1   = joy[7];
 
 wire m_right1  = joy1[0];
 wire m_left1   = joy1[1];
-wire m_down1   = joy1[3];
-wire m_up1     = joy1[2];
+wire m_down1   = (mod==mod_futurespy) ? joy1[2] : joy1[3];
+wire m_up1     = (mod==mod_futurespy) ? joy1[3] : joy1[2];
 wire m_fire1a  = joy1[4];
-//wire m_fire1b  = joy1[5];
-//wire m_fire1c  = joy1[6];
-//wire m_fire1d  = joy1[7];
+wire m_fire1b  = joy1[5];
 
 wire m_right2  = joy2[0];
 wire m_left2   = joy2[1];
-wire m_down2   = joy2[3];
-wire m_up2     = joy2[2];
+wire m_down2   = (mod==mod_futurespy) ? joy2[2] : joy2[3];
+wire m_up2     = (mod==mod_futurespy) ? joy2[3] : joy2[2];
 wire m_fire2a  = joy2[4];
-//wire m_fire2b  = joy2[5];
-//wire m_fire2c  = joy2[6];
-//wire m_fire2d  = joy2[7];
+wire m_fire2b  = joy2[5];
 
 wire m_right   = m_right1 | m_right2;
 wire m_left    = m_left1  | m_left2; 
 wire m_down    = m_down1  | m_down2; 
 wire m_up      = m_up1    | m_up2;   
 wire m_fire_a  = m_fire1a | m_fire2a;
-//wire m_fire_b  = m_fire1b | m_fire2b;
-//wire m_fire_c  = m_fire1c | m_fire2c;
-//wire m_fire_d  = m_fire1d | m_fire2d;
+wire m_fire_b  = m_fire1b | m_fire2b;
 
 wire rom_download = ioctl_download && !ioctl_index;
 
 wire        ioctl_download;
-wire  [7:0] ioctl_index;
+wire        ioctl_upload;
 wire        ioctl_wr;
 wire [24:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
+wire  [7:0] ioctl_din;
+wire  [7:0] ioctl_index;
+wire        ioctl_wait;
 
 wire reset = status[0] | buttons[1] | rom_download;
 
@@ -301,6 +316,11 @@ zaxxon zaxxon
 	.dl_wr(ioctl_wr&rom_download),
 	.dl_data(ioctl_dout),
 
+	.ram_address(ram_address),
+	.ram_data(ioctl_din),
+	.ram_data_in(hiscore_to_ram),
+	.ram_data_write(hiscore_write),
+	
 	.coin1(m_coin1),
 	.coin2(1'b0),
 	.start1(m_start1),
@@ -310,19 +330,21 @@ zaxxon zaxxon
 	.left(m_left),
 	.up(m_up),
 	.down(m_down),
-	.fire(m_fire_a),
+	.fire1(m_fire_a),
+	.fire2(m_fire_b),
  
 	.right_c(m_right),
 	.left_c(m_left),
 	.up_c(m_up),
 	.down_c(m_down),
-	.fire_c(m_fire_a),
+	.fire1_c(m_fire_a),
+	.fire2_c(m_fire_b),
 	
 	.sw1_input(sw[0]), // cocktail(1) / sound(1) / ships(2) / N.U.(2) /  extra ship (2)	
 	.sw2_input(8'h33), // coin b(4) / coin a(4)  -- "3" => 1c_1c
 
-	.service(1'b0),
-	.flip_screen(1'b1),
+	//.service(status[6]),
+	.flip_screen(~status[7]),
 	
 	.wave_data(wave_data),
 	.wave_addr(wave_addr),
@@ -394,5 +416,29 @@ sdram sdram
 	.ready()
 );
 
+
+// HISCORE SAVE/LOAD
+
+wire [9:0]ram_address;
+wire [7:0]hiscore_to_ram;
+wire hiscore_write;
+
+hiscore #(10) hi (
+   .clk(clk_sys),
+   .reset(reset),
+   .mode(status[15]),
+	//.delay(25'h1FFFFFF),
+	.delay(1'b0),
+   .ioctl_upload(ioctl_upload),
+   .ioctl_download(ioctl_download),
+   .ioctl_wr(ioctl_wr),
+   .ioctl_addr(ioctl_addr),
+   .ioctl_dout(ioctl_dout),
+   .ioctl_din(ioctl_din),
+   .ioctl_index(ioctl_index),
+   .ram_address(ram_address),
+	.data_to_ram(hiscore_to_ram),
+	.ram_write(hiscore_write)
+);
 
 endmodule
