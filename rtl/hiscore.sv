@@ -60,7 +60,8 @@ wire	[7:0]		end_val;
 
 reg				downloading_config;
 reg				downloading_dump;
-reg				downloading_complete;
+reg				downloaded_config;
+reg				downloaded_dump;
 reg	[3:0]		initialised;
 
 assign downloading_config = ioctl_download && ioctl_wr && (ioctl_index==3);
@@ -122,23 +123,20 @@ hiscoredata (
 	.d_a(ioctl_dout),
 	.clk_b(clk),
 	.addr_b(local_addr[7:0]),
-//	.we_b(ioctl_upload && (ioctl_index==4)), 
-//	.d_b(ioctl_din),
+	.we_b(ioctl_upload), 
+	.d_b(ioctl_din),
 	.q_b(data_to_ram)
 );
 
 
 always @(posedge clk)
 begin
-
-	//if (ioctl_download & (ioctl_index==3))
 	if (downloading_config)
 	begin
 		// Save configuration data into tables
 		//if(ioctl_wr & ~ioctl_addr[2] & ~ioctl_addr[1] & ~ioctl_addr[0]) ioctl_dout_r <= ioctl_dout;
 		if(ioctl_wr & ~ioctl_addr[2] & ~ioctl_addr[1] &  ioctl_addr[0]) ioctl_dout_r2 <= ioctl_dout;
 		if(ioctl_wr & ~ioctl_addr[2] & ioctl_addr[1] & ~ioctl_addr[0]) ioctl_dout_r3 <= ioctl_dout;
-
 		// Keep track of the largest entry during config download
 		total_entries <= ioctl_addr[6:3];
 	end
@@ -149,15 +147,20 @@ begin
 //	if (ioctl_download & ioctl_wr & ioctl_addr[2] &  ioctl_addr[1] & ~ioctl_addr[0] &(ioctl_index==3))
 //		$display("ENDVAL ioctl_addr %x %b counter %x ioctl_dout %x ", ioctl_addr,ioctl_addr[2:0],ioctl_addr[6:3],ioctl_dout);
 
-end
+	// Track completion of configuration and dump download
+	if ((last_ioctl_download != ioctl_download) && (ioctl_download == 1'b0))
+	begin
+		if (last_index==3) downloaded_config <= 1'b1;
+		if (last_index==4) downloaded_dump <= 1'b1;
+	end
 
-always @(posedge clk)
-begin
+	// Track last ioctl values 
+	last_ioctl_download <= ioctl_download;
+	last_index <= ioctl_index;
 
 	// Generate last address of entry to check end value
 	end_addr <= addr_base + length - 1'b1;
 
-	
 	// Check for state machine initalise/reset
 	if (initialised == 1'b0 || (reset_last == 1'b1 && reset == 1'b0))
 	begin
@@ -168,24 +171,30 @@ begin
 	end
 	reset_last <= reset;
 
-	
 	// Upload scores to HPS
 	if (ioctl_upload == 1'b1) 
 	begin
 		// generate addresses to read high score from game memory. Base addresses off ioctl_address
 		if (ioctl_addr == 25'b0) begin
+			local_addr <= 25'b0;
 			base_io_addr <= 25'b0;
 			counter <= 4'b0;
 		end
+		// Move to next entry when last address is reached
 		if (old_io_addr!=ioctl_addr && ram_addr==end_addr[24:0])
 		begin
 			counter <= counter + 1'b1;
 			base_io_addr <= ioctl_addr;
 		end
-		ram_addr<= addr_base + (ioctl_addr - base_io_addr);
+		// Set game ram address for reading back to HPS
+		ram_addr <= addr_base + (ioctl_addr - base_io_addr);
+		// Set local addresses to update cached dump in case of reset
+		local_addr <= ioctl_addr;
+		// Mark dump as readable
+		downloaded_dump <= 1'b1;
 	end
 	// State machine to write data to game RAM
-	else if (downloading_complete == 1'b1 && ioctl_upload == 1'b0 && reset == 1'b0) begin
+	else if (downloaded_dump == 1'b1 && ioctl_upload == 1'b0 && reset == 1'b0) begin
 		// Wait for timer before starting state machine
 		if (timer > 0) 
 		begin
@@ -228,17 +237,18 @@ begin
 						if (ioctl_din == end_val)
 						begin
 							//$display("HI HISCORE end_val==ioctl_din");
-							// check to see if we are at the end..
-							if (counter==total_entries)   // we finished and validated - move to phase II, copying scores into game ram
+
+							if (counter==total_entries)
 							begin
+								// If this was the last entry then move to phase II, copying scores into game ram
 								state <= 3'b110;
 //								$display("state 010 addr_base %x %x %x ",addr_base,local_addr,counter);
 								counter <= 0;
 								ram_write <= 0;
-//								$display("moving on..");
 								ram_addr <= {1'b0, addr_base};
 							end
-							else begin  // increment counter, and check next entry
+							else begin  
+								// Increment counter and check next entry
 	//							$display("try next entry");
 								counter <= counter + 1'b1;
 								state <= 3'b000;
@@ -257,16 +267,20 @@ begin
 						begin
 							if (counter == total_entries) 
 							begin 
+								// 
 	//							$display("counter==total %x == %x done writing",counter,total_entries);
 								state <= 3'b101;
-							end else begin
+							end
+							else
+							begin
 	//							$display("increment counter %x ",counter);
 								counter <= counter + 1'b1;
 								base_io_addr <= local_addr + 1'b1;
 								state <= 3'b110;
-								end
-						end else begin
-							//ram_addr<= addr_base + (local_addr - base_io_addr);
+							end
+						end 
+						else 
+						begin
 							state<=3'b111;
 						end
 						ram_write<=0;
@@ -310,16 +324,6 @@ begin
 	old_io_addr<=ioctl_addr;
 end
 
-
-always @(posedge clk) begin
-	// Track completion of configuration and dump download
-	if ((last_ioctl_download != ioctl_download) && (ioctl_download==1'b0) && (last_index==4))
-	begin
-		downloading_complete <= 1'b1;
-	end
-	last_ioctl_download <= ioctl_download;
-	last_index <= ioctl_index;
-end
 
 
 

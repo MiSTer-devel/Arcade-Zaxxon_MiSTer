@@ -419,11 +419,11 @@ sdram sdram
 
 // HISCORE SAVE/LOAD
 
-wire [9:0]ram_address;
+wire [11:0]ram_address;
 wire [7:0]hiscore_to_ram;
 wire hiscore_write;
 
-hiscore #(10) hi (
+hiscore #(12) hi (
    .clk(clk_sys),
    .reset(reset),
    .mode(status[15]),
