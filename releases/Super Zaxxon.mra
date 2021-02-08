@@ -50084,7 +50084,8 @@ FF FF FF FF 00 00 01 00 00 00 00 00 01 00
 	<rom index="3" md5="none">
 		<part>
 		 00 00 61 00 7E 90 81 00 
+		 00 00 60 38 03 00 00 00 
 		</part>
    </rom>
-   <nvram index="4" size="126"/>
+   <nvram index="4" size="129"/>
 </misterromdescription>
