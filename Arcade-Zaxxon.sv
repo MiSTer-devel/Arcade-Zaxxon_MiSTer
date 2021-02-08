@@ -252,12 +252,11 @@ always @(posedge clk_sys) if (ioctl_wr & (ioctl_index==1)) mod <= ioctl_dout;
 
 localparam mod_zaxxon = 0;
 localparam mod_superzaxxon = 1;
-localparam mod_futurespy= 2;
+localparam mod_futurespy = 2;
 
-
-wire m_start1  = joy[5];
-wire m_start2  = joy[6];
-wire m_coin1   = joy[7];
+wire m_start1  = (mod==mod_futurespy) ? joy1[6] : joy1[5];
+wire m_start2  = (mod==mod_futurespy) ? joy1[7] : joy1[6];
+wire m_coin1   = (mod==mod_futurespy) ? joy1[8] : joy1[7];
 
 wire m_right1  = joy1[0];
 wire m_left1   = joy1[1];

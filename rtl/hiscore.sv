@@ -172,7 +172,7 @@ begin
 	reset_last <= reset;
 
 	// Upload scores to HPS
-	if (ioctl_upload == 1'b1) 
+	if (ioctl_upload == 1'b1 && mode == 1'b0) 
 	begin
 		// generate addresses to read high score from game memory. Base addresses off ioctl_address
 		if (ioctl_addr == 25'b0) begin
@@ -194,7 +194,7 @@ begin
 		downloaded_dump <= 1'b1;
 	end
 	// State machine to write data to game RAM
-	else if (downloaded_dump == 1'b1 && ioctl_upload == 1'b0 && reset == 1'b0) begin
+	else if (downloaded_dump == 1'b1 && ioctl_upload == 1'b0 && reset == 1'b0 && mode == 1'b0) begin
 		// Wait for timer before starting state machine
 		if (timer > 0) 
 		begin
