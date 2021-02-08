@@ -1,47 +1,39 @@
-# Sega/Gremlin Zaxxon port for MiSTer
+# [Arcade: Zaxxon](https://www.system16.com/hardware.php?id=689) port to [MiSTer](https://github.com/MiSTer-devel/Main_MiSTer/wiki)
 
-# Keyboard inputs :
-```
-   ESC         : Coin 1
-   F1          : Start 1P
-   F2          : Start 2P 
-   UP,DOWN,LEFT,RIGHT arrows : Player 1
-   LCtrl : Fire A
+MiSTer port by Dar (darfpga@aol.fr - sourceforge/darfpga)
 
+## Description
 
-   MAME/IPAC/JPAC Style Keyboard inputs:
-     5           : Coin 1
-     6           : Coin 2
-     1           : Start 1 Player
-     2           : Start 2 Player
-     R,F,D,G     : Player 2
-     A           : Fire2 A
-	
- Joystick support. 
-```
-# Games
- 
-# ROMs
-```
-                                *** Attention ***
+A simulation model of Sega's Zaxxon hardware.
 
-ROMs are not included. In order to use this arcade, you need to provide the
-correct ROMs.
+## Games
 
-To simplify the process .mra files are provided in the releases folder, that
-specifies the required ROMs with checksums. The ROMs .zip filename refers to the
-corresponding file of the M.A.M.E. project.
+Currently implemented:
 
-Please refer to https://github.com/MiSTer-devel/Main_MiSTer/wiki/Arcade-Roms for
-information on how to setup and use the environment.
+* Zaxxon
+* Super Zaxxon
+* Future Spy
 
-Quickreference for folders and file placement:
+## High score save/load
 
-/_Arcade/<game name>.mra
-/_Arcade/cores/<game rbf>.rbf
-/_Arcade/mame/<mame rom>.zip
-/_Arcade/hbmame/<hbmame rom>.zip
+High score save/load is set to 'Manual' by default for this core.
+ * To save your scores use the 'Save Settings' option in the OSD
+ * To restore original scores, set the 'High Score Save' option to 'Off' and reset the core
+
+## ROM Files Instructions
+
+**ROMs are not included!** In order to use this arcade core, you will need to provide the correct ROM file yourself.
+
+To simplify the process .mra files are provided in the releases folder, that specify the required ROMs with their checksums. The ROMs .zip filename refers to the
+corresponding file from the MAME project.
+
+Please refer to https://github.com/MiSTer-devel/Main_MiSTer/wiki/Arcade-Roms for information on how to setup and use the environment.
+
+Quick reference for folders and file placement:
 
 ```
-
-Launch game using the appropriate .MRA
+/_Arcade/<game name>.mra  
+/_Arcade/cores/<game rbf>.rbf  
+/_Arcade/mame/<mame rom>.zip  
+/_Arcade/hbmame/<hbmame rom>.zip  
+```

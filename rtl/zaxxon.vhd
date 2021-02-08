@@ -148,13 +148,15 @@ mod_futurespy   : in std_logic;
  right          : in std_logic; 
  up             : in std_logic;
  down           : in std_logic;
- fire           : in std_logic;
+ fire1          : in std_logic;
+ fire2          : in std_logic;
  
  left_c         : in std_logic; 
  right_c        : in std_logic; 
  up_c           : in std_logic;
  down_c         : in std_logic;
- fire_c         : in std_logic;
+ fire1_c        : in std_logic;
+ fire2_c        : in std_logic;
 
  sw1_input      : in  std_logic_vector( 7 downto 0);
  sw2_input      : in  std_logic_vector( 7 downto 0);
@@ -168,7 +170,13 @@ mod_futurespy   : in std_logic;
 
  wave_addr      : buffer std_logic_vector(19 downto 0);
  wave_rd        : out std_logic;
- wave_data      : in std_logic_vector(15 downto 0)
+ wave_data      : in std_logic_vector(15 downto 0);
+ 
+ -- HISCORE
+ ram_address    : in  std_logic_vector(11 downto 0);
+ ram_data       : out std_logic_vector(7 downto 0);
+ ram_data_in    : in  std_logic_vector(7 downto 0);
+ ram_data_write : in  std_logic
  
  );
 end zaxxon;
@@ -567,8 +575,8 @@ end process;
 ---------------------------------
 -- players/dip switches inputs --
 ---------------------------------
-p1_input <= "000" & fire   & down   & up   & left   & right  ;
-p2_input <= "000" & fire_c & down_c & up_c & left_c & right_c;
+p1_input <= "00" & fire2 & fire1   & down   & up   & left   & right  ;
+p2_input <= "00" & fire2_c & fire1_c & down_c & up_c & left_c & right_c;
 gen_input <= service & coin2_mem & coin1_mem & '0' & start2 & start1 & "00";
 
 ------------------------------------------
@@ -1157,14 +1165,21 @@ port map(
 );
 
 -- working RAM   0x6000-0x6FFF
-wram : entity work.gen_ram
+wram : entity work.dpram
 generic map( dWidth => 8, aWidth => 12)
 port map(
- clk  => clock_vidn,
- we   => wram_we,
- addr => cpu_addr(11 downto 0),
- d    => cpu_do,
- q    => wram_do
+ clk_a  => clock_vidn,
+ we_a   => wram_we,
+ addr_a => cpu_addr(11 downto 0),
+ d_a    => cpu_do,
+ q_a    => wram_do,
+ 
+ -- high score read/write
+ clk_b  => clock_vidn,
+ we_b   => ram_data_write,
+ addr_b => ram_address,
+ d_b => ram_data_in,
+ q_b => ram_data
 );
 
 -- video RAM   0x8000-0x83FF + mirroring adresses

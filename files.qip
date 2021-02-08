@@ -6,4 +6,5 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/Sega_Crypt.v
 set_global_assignment -name VHDL_FILE rtl/dec_315_5013.vhd
 set_global_assignment -name VHDL_FILE rtl/dec_315_5061.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/sdram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/hiscore.sv
 set_global_assignment -name SYSTEMVERILOG_FILE Arcade-Zaxxon.sv
