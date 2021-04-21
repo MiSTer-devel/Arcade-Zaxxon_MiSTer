@@ -122,6 +122,7 @@ entity zaxxon is
 port(
  clock_24       : in std_logic;
  reset          : in std_logic;
+ pause          : in std_logic;
 mod_superzaxxon : in std_logic;
 mod_futurespy   : in std_logic;
 -- tv15Khz_mode   : in std_logic;
@@ -173,10 +174,10 @@ mod_futurespy   : in std_logic;
  wave_data      : in std_logic_vector(15 downto 0);
  
  -- HISCORE
- ram_address    : in  std_logic_vector(11 downto 0);
- ram_data       : out std_logic_vector(7 downto 0);
- ram_data_in    : in  std_logic_vector(7 downto 0);
- ram_data_write : in  std_logic
+ hs_address     : in  std_logic_vector(11 downto 0);
+ hs_data_out    : out std_logic_vector(7 downto 0);
+ hs_data_in     : in  std_logic_vector(7 downto 0);
+ hs_write       : in  std_logic
  
  );
 end zaxxon;
@@ -896,7 +897,7 @@ begin
 				if flip  = '1' then 
 					bg_bit_nb <= bg_bit_nb + 1;
 				else
-					bg_bit_nb <= bg_bit_nb - 1;			
+					bg_bit_nb <= bg_bit_nb - 1;
 				end if;
 			end if;
 			
@@ -925,11 +926,11 @@ begin
 			
 			if ch_vid /= "00" then
 				palette_addr <= ch_color_ref & ch_color_do(3 downto 0) & '0' & ch_vid;
- 			end if;			
+ 			end if;
 		
-			video_r <= palette_do(2 downto 0);		
-			video_g <= palette_do(5 downto 3);		
-			video_b <= palette_do(7 downto 6);		
+			video_r <= palette_do(2 downto 0);
+			video_g <= palette_do(5 downto 3);
+			video_b <= palette_do(7 downto 6);
 		
 		end if;
 
@@ -1114,7 +1115,7 @@ port map(
   RESET_n => reset_n,
   CLK     => clock_vid,
   CEN     => cpu_ena,
-  WAIT_n  => '1',
+  WAIT_n  => not pause,
   INT_n   => cpu_irq_n,
   NMI_n   => '1', --cpu_nmi_n,
   BUSRQ_n => '1',
@@ -1175,11 +1176,11 @@ port map(
  q_a    => wram_do,
  
  -- high score read/write
- clk_b  => clock_vidn,
- we_b   => ram_data_write,
- addr_b => ram_address,
- d_b => ram_data_in,
- q_b => ram_data
+ clk_b  => clock_24,
+ we_b   => hs_write,
+ addr_b => hs_address,
+ d_b    => hs_data_in,
+ q_b    => hs_data_out
 );
 
 -- video RAM   0x8000-0x83FF + mirroring adresses
@@ -1463,7 +1464,7 @@ port map(
 -- data => ch_color_do
 --);
 
-ch_color_rom_we <= '1' when dl_wr = '1' and dl_addr(17 downto 8) = "1001000001" else '0'; -- 1C100-1C1FF
+ch_color_rom_we <= '1' when dl_wr = '1' and dl_addr(17 downto 8) = "1001000001" else '0'; -- 24100-241FF
 
 char_color: entity work.dpram
 generic map( dWidth => 8, aWidth => 8)
@@ -1486,7 +1487,7 @@ port map(
 --);
 
 --0000 0010 0100 000000000000
-palette_rom_we <= '1' when dl_wr = '1' and dl_addr(17 downto 8) = "1001000000" else '0'; -- 1C000-1C0FF
+palette_rom_we <= '1' when dl_wr = '1' and dl_addr(17 downto 8) = "1001000000" else '0'; -- 24000-240FF
 
 palette: entity work.dpram
 generic map( dWidth => 8, aWidth => 8)

@@ -8,7 +8,6 @@
 	<category>Space</category>
 	<setname>szaxxon</setname>
 	<rbf>zaxxon</rbf>
-
 	<switches default="7F">
 		<dip bits="0,1"		name="Extra ship"	ids="40.000,20.000,30.000,10.000"/>
 		<dip bits="3"		name="Difficulty"	ids="Hard,Normal"/>
@@ -16,7 +15,7 @@
 		<dip bits="6"		name="Sound"		ids="Off,On"/>
 		<dip bits="7"		name="Cabinet"		ids="Upright,Cocktail"/>
 	</switches>
-	<buttons names="Fire,Start 1P,Start 2P,Coin" default="A,Start,Select,R"/>
+	<buttons names="Fire,Start 1P,Start 2P,Coin,Pause" default="A,Start,Select,R,L"/>
 	<rom index="1">
 		<part>01</part>
 	</rom>
@@ -29,14 +28,9 @@
 		<part crc="f51af375" name="1807b.u113"/>
 		<part crc="a7de021d" name="1806b.u112"/>
 		<part crc="5bfb3b04" name="1805b.u111"/>
-		<part crc="1503ae41" name="1812e.u77"/>
-		<part crc="3b53d83f" name="1813e.u78"/>
-		<part crc="581e8793" name="1814e.u79"/>
-		<part crc="581e8793" name="1814e.u79"/>
-		<part crc="1503ae41" name="1812e.u77"/>
-		<part crc="3b53d83f" name="1813e.u78"/>
-		<part crc="581e8793" name="1814e.u79"/>
-		<part crc="581e8793" name="1814e.u79"/>
+		<part crc="1503ae41" name="1812e.u77" repeat="2"/>
+		<part crc="3b53d83f" name="1813e.u78" repeat="2"/>
+		<part crc="581e8793" name="1814e.u79" repeat="4"/>
 		<part crc="dd1b52df" name="1809b.u91"/>
 		<part crc="b5bc07f0" name="1808b.u90"/>
 		<part crc="68e84174" name="1811b.u93"/>
@@ -50083,9 +50077,10 @@ FF FF FF FF 00 00 01 00 00 00 00 00 01 00
 	</rom>
 	<rom index="3" md5="none">
 		<part>
-		 00 00 61 00 7E 90 81 00 
-		 00 00 60 38 03 00 00 00 
+		00 00 FF FF 00 FF 00 02 00 02 00 01 00 FF 00 00
+		00 00 61 00 00 7E 90 81
+		00 00 60 38 00 03 00 00
 		</part>
-   </rom>
-   <nvram index="4" size="129"/>
+	</rom>
+	<nvram index="4" size="129"/>
 </misterromdescription>
