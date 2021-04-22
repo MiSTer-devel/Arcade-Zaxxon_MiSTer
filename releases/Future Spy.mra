@@ -8,7 +8,6 @@
 	<category>Space</category>
 	<setname>futurespy</setname>
 	<rbf>zaxxon</rbf>
-
 	<switches default="00,7F">
 		<dip bits="8"		name="Cabinet"		ids="Cocktail,Upright"/>
 		<dip bits="9"		name="Demo Sound"	ids="Off,On"/>
@@ -16,7 +15,7 @@
 		<dip bits="12,13"	name="Bonus"		ids="2/4/6,3/6/9,4/7/10,4/8/12"/>
 		<dip bits="14,15"	name="Difficulty"	ids="Easy,Medium,Hard,Hardest"/>
 	</switches>
-	<buttons names="Fire 1,Fire 2,Start 1P,Start 2P,Coin" default="A,B,Start,Select,R"/>
+	<buttons names="Fire 1,Fire 2,Start 1P,Start 2P,Coin,Pause" default="A,B,Start,Select,R,L"/>
 	<rom index="1">
 		<part>02</part>
 	</rom>
@@ -50079,8 +50078,9 @@ FF FF FF FF 00 00 01 00 00 00 00 00 01 00
 	</rom>
 	<rom index="3" md5="none">
 		<part>
-		 00 00 64 19 3C 00 41 00 
+		00 00 FF FF 00 FF 00 02 00 02 00 01 00 FF 00 00
+		00 00 64 19 00 3C 00 41
 		</part>
-   </rom>
-   <nvram index="4" size="60"/>
+	</rom>
+	<nvram index="4" size="60"/>
 </misterromdescription>

@@ -37,10 +37,10 @@ module emu
 	//Multiple resolutions are supported using different CE_PIXEL rates.
 	//Must be based on CLK_VIDEO
 	output        CE_PIXEL,
-
 	//Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
-	output [11:0] VIDEO_ARX,
-	output [11:0] VIDEO_ARY,
+	//if VIDEO_ARX[12] or VIDEO_ARY[12] is set then [11:0] contains scaled size instead of aspect ratio.
+	output [12:0] VIDEO_ARX,
+	output [12:0] VIDEO_ARY,
 
 	output  [7:0] VGA_R,
 	output  [7:0] VGA_G,
@@ -52,7 +52,10 @@ module emu
 	output [1:0]  VGA_SL,
 	output        VGA_SCALER, // Force VGA scaler
 
-`ifdef USE_FB
+	input  [11:0] HDMI_WIDTH,
+	input  [11:0] HDMI_HEIGHT,
+
+`ifdef MISTER_FB
 	// Use framebuffer in DDRAM (USE_FB=1 in qsf)
 	// FB_FORMAT:
 	//    [2:0] : 011=8bpp(palette) 100=16bpp 101=24bpp 110=32bpp
@@ -70,6 +73,7 @@ module emu
 	input         FB_LL,
 	output        FB_FORCE_BLANK,
 
+`ifdef MISTER_FB_PALETTE
 	// Palette control for 8bit modes.
 	// Ignored for other video modes.
 	output        FB_PAL_CLK,
@@ -77,6 +81,7 @@ module emu
 	output [23:0] FB_PAL_DOUT,
 	input  [23:0] FB_PAL_DIN,
 	output        FB_PAL_WR,
+`endif
 `endif
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
@@ -98,7 +103,16 @@ module emu
 	output        AUDIO_S,   // 1 - signed audio samples, 0 - unsigned
 	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
 
-`ifdef USE_DDRAM
+	//ADC
+	inout   [3:0] ADC_BUS,
+
+	//SD-SPI
+	output        SD_SCK,
+	output        SD_MOSI,
+	input         SD_MISO,
+	output        SD_CS,
+	input         SD_CD,
+
 	//High latency DDR3 RAM interface
 	//Use for non-critical time purposes
 	output        DDRAM_CLK,
@@ -111,9 +125,7 @@ module emu
 	output [63:0] DDRAM_DIN,
 	output  [7:0] DDRAM_BE,
 	output        DDRAM_WE,
-`endif
 
-`ifdef USE_SDRAM
 	//SDRAM interface with lower latency
 	output        SDRAM_CLK,
 	output        SDRAM_CKE,
@@ -126,7 +138,27 @@ module emu
 	output        SDRAM_nCAS,
 	output        SDRAM_nRAS,
 	output        SDRAM_nWE,
+
+`ifdef MISTER_DUAL_SDRAM
+	//Secondary SDRAM
+	//Set all output SDRAM_* signals to Z ASAP if SDRAM2_EN is 0
+	input         SDRAM2_EN,
+	output        SDRAM2_CLK,
+	output [12:0] SDRAM2_A,
+	output  [1:0] SDRAM2_BA,
+	inout  [15:0] SDRAM2_DQ,
+	output        SDRAM2_nCS,
+	output        SDRAM2_nCAS,
+	output        SDRAM2_nRAS,
+	output        SDRAM2_nWE,
 `endif
+
+	input         UART_CTS,
+	output        UART_RTS,
+	input         UART_RXD,
+	output        UART_TXD,
+	output        UART_DTR,
+	input         UART_DSR,
 
 	// Open-drain User port.
 	// 0 - D+/RX
@@ -139,14 +171,19 @@ module emu
 	input         OSD_STATUS
 );
 
+assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
+assign {UART_RTS, UART_TXD, UART_DTR} = 0;
+
 assign VGA_F1    = 0;
 assign VGA_SCALER= 0;
 assign USER_OUT  = '1;
 assign LED_USER  = rom_download;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
+assign BUTTONS   = 0;
+assign AUDIO_MIX = 0;
 
-assign {FB_PAL_CLK, FB_FORCE_BLANK, FB_PAL_ADDR, FB_PAL_DOUT, FB_PAL_WR} = '0;
+assign FB_FORCE_BLANK = '0;
 
 wire [1:0] ar = status[20:19];
 
@@ -161,16 +198,18 @@ localparam CONF_STR = {
 	"H0O2,Orientation,Vert,Horz;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
+	"P1,Pause options;",
+	"P1OP,Pause when OSD is open,On,Off;",
+	"P1OQ,Dim video after 10s,On,Off;",
+	"-;",
 	"DIP;",
 	"-;",
-	"O6,Service,Off,On;",
+//	"O6,Service,Off,On;",
 	"O7,Flip,Off,On;",
 	"-;",
-	"OF,High Score Save,Manual,Off;",
-	"-;",
 	"R0,Reset;",
-	"J1,Fire 1,Fire 2,Start 1P,Start 2P,Coin;",
-	"jn,A,B,Start,Select,R;",
+	"J1,Fire 1,Fire 2,Start 1P,Start 2P,Coin,Pause;",
+	"jn,A,B,Start,Select,R,L;",
 	"V,v",`BUILD_DATE
 };
 
@@ -278,8 +317,17 @@ wire m_down    = m_down1  | m_down2;
 wire m_up      = m_up1    | m_up2;   
 wire m_fire_a  = m_fire1a | m_fire2a;
 wire m_fire_b  = m_fire1b | m_fire2b;
+wire m_pause  = (mod==mod_futurespy) ? joy1[9] : joy1[8];
 
-wire rom_download = ioctl_download && !ioctl_index;
+// PAUSE SYSTEM
+wire				pause_cpu;
+wire [7:0]		rgb_out;
+pause #(3,3,2,24) pause (
+	.*,
+	.user_button(m_pause),
+	.pause_request(hs_pause),
+	.options(~status[26:25])
+);
 
 wire        ioctl_download;
 wire        ioctl_upload;
@@ -290,7 +338,19 @@ wire  [7:0] ioctl_din;
 wire  [7:0] ioctl_index;
 wire        ioctl_wait;
 
-wire reset = status[0] | buttons[1] | rom_download;
+reg         download_complete = 1'b0;
+reg         last_ioctl_download;
+reg   [7:0] last_ioctl_index;
+always @(posedge clk_sys)
+begin
+	last_ioctl_download <= ioctl_download;
+	last_ioctl_index <= ioctl_index;
+	if (last_ioctl_download == 1'd1 && ioctl_download == 1'd0 && last_ioctl_index == 2'd2) download_complete = 1'b1;
+end
+
+wire rom_download = ioctl_download && (ioctl_index == 1'd0);
+wire wave_download = ioctl_download && (ioctl_index == 2'd2);
+wire reset = status[0] | buttons[1] | (download_complete == 1'b0);
 
 zaxxon zaxxon
 (
@@ -298,6 +358,7 @@ zaxxon zaxxon
 	.mod_futurespy(mod==mod_futurespy),
 	.clock_24(clk_sys),
 	.reset(reset),
+	.pause(pause_cpu),
 	.video_r(r),
 	.video_g(g),
 	.video_b(b),
@@ -312,13 +373,13 @@ zaxxon zaxxon
 	.audio_out_r(audio_r),
 
 	.dl_addr(ioctl_addr[17:0]),
-	.dl_wr(ioctl_wr&rom_download),
+	.dl_wr(ioctl_wr & rom_download),
 	.dl_data(ioctl_dout),
 
-	.ram_address(ram_address),
-	.ram_data(ioctl_din),
-	.ram_data_in(hiscore_to_ram),
-	.ram_data_write(hiscore_write),
+	.hs_address(hs_address),
+	.hs_data_out(ioctl_din),
+	.hs_data_in(hs_data_in),
+	.hs_write(hs_write),
 	
 	.coin1(m_coin1),
 	.coin2(1'b0),
@@ -383,7 +444,7 @@ arcade_video #(256,8) arcade_video
 	.*,
 
 	.clk_video(clk_48m),
-	.RGB_in({r,g,b}),
+	.RGB_in(rgb_out),
 	.HBlank(hblank),
 	.VBlank(vblank),
 	.HSync(hs),
@@ -407,7 +468,7 @@ sdram sdram
 	.clk(clk_48m),
 
 	.addr(ioctl_download ? ioctl_addr :{5'b0,wave_addr}),
-	.we(ioctl_download && ioctl_wr && (ioctl_index==2)),
+	.we(wave_download && ioctl_wr),
 	.rd(~ioctl_download & wave_rd),
 	.din(ioctl_dout),
 	.dout(wave_data),
@@ -418,26 +479,32 @@ sdram sdram
 
 // HISCORE SAVE/LOAD
 
-wire [11:0]ram_address;
-wire [7:0]hiscore_to_ram;
-wire hiscore_write;
+wire [11:0]hs_address;
+wire [7:0]hs_data_in;
+wire hs_write;
+wire hs_access;
+wire hs_pause;
 
-hiscore #(12) hi (
-   .clk(clk_sys),
-   .reset(reset),
-   .mode(status[15]),
-	//.delay(25'h1FFFFFF),
-	.delay(1'b0),
-   .ioctl_upload(ioctl_upload),
-   .ioctl_download(ioctl_download),
-   .ioctl_wr(ioctl_wr),
-   .ioctl_addr(ioctl_addr),
-   .ioctl_dout(ioctl_dout),
-   .ioctl_din(ioctl_din),
-   .ioctl_index(ioctl_index),
-   .ram_address(ram_address),
-	.data_to_ram(hiscore_to_ram),
-	.ram_write(hiscore_write)
+hiscore #(
+	.HS_ADDRESSWIDTH(12),
+	.HS_SCOREWIDTH(8),			// 129 bytes max (zaxxon/szaxxon)
+	.CFG_ADDRESSWIDTH(2),		// 2 entries max (zaxxon/szaxxon)
+	.CFG_LENGTHWIDTH(2)
+) hi (
+	.clk(clk_sys),
+	.reset(reset),
+	.ioctl_upload(ioctl_upload),
+	.ioctl_download(ioctl_download),
+	.ioctl_wr(ioctl_wr),
+	.ioctl_addr(ioctl_addr),
+	.ioctl_dout(ioctl_dout),
+	.ioctl_din(ioctl_din),
+	.ioctl_index(ioctl_index),
+	.ram_address(hs_address),
+	.data_to_ram(hs_data_in),
+	.ram_write(hs_write),
+	.ram_access(hs_access),
+	.pause_cpu(hs_pause)
 );
 
 endmodule
