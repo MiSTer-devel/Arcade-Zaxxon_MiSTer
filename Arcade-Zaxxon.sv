@@ -37,6 +37,7 @@ module emu
 	//Multiple resolutions are supported using different CE_PIXEL rates.
 	//Must be based on CLK_VIDEO
 	output        CE_PIXEL,
+	
 	//Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
 	//if VIDEO_ARX[12] or VIDEO_ARY[12] is set then [11:0] contains scaled size instead of aspect ratio.
 	output [12:0] VIDEO_ARX,
@@ -54,6 +55,7 @@ module emu
 
 	input  [11:0] HDMI_WIDTH,
 	input  [11:0] HDMI_HEIGHT,
+	output        HDMI_FREEZE,
 
 `ifdef MISTER_FB
 	// Use framebuffer in DDRAM (USE_FB=1 in qsf)
@@ -184,6 +186,7 @@ assign BUTTONS   = 0;
 assign AUDIO_MIX = 0;
 
 assign FB_FORCE_BLANK = '0;
+assign HDMI_FREEZE = 0;
 
 wire [1:0] ar = status[20:19];
 
@@ -198,6 +201,7 @@ localparam CONF_STR = {
 	"H0O2,Orientation,Vert,Horz;",
 	"O35,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
+	"H1OR,Autosave Hiscores,Off,On;",
 	"P1,Pause options;",
 	"P1OP,Pause when OSD is open,On,Off;",
 	"P1OQ,Dim video after 10s,On,Off;",
@@ -245,16 +249,24 @@ reg   [7:0] mouse_flags;
 
 wire [21:0] gamma_bus;
 
-hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
+wire        ioctl_download;
+wire        ioctl_upload;
+wire        ioctl_upload_req;
+wire        ioctl_wr;
+wire [24:0] ioctl_addr;
+wire  [7:0] ioctl_dout;
+wire  [7:0] ioctl_din;
+wire  [7:0] ioctl_index;
+wire        ioctl_wait;
+
+hps_io #(.CONF_STR(CONF_STR)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str(CONF_STR),
-
 	.buttons(buttons),
 	.status(status),
-	.status_menumask({direct_video}),
+	.status_menumask({~hs_configured,direct_video}),
 
 	.forced_scandoubler(forced_scandoubler),
 	.gamma_bus(gamma_bus),
@@ -262,6 +274,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 
 	.ioctl_download(ioctl_download),
 	.ioctl_upload(ioctl_upload),
+	.ioctl_upload_req(ioctl_upload_req),
 	.ioctl_wr(ioctl_wr),
 	.ioctl_addr(ioctl_addr),
 	.ioctl_dout(ioctl_dout),
@@ -329,15 +342,6 @@ pause #(3,3,2,24) pause (
 	.options(~status[26:25])
 );
 
-wire        ioctl_download;
-wire        ioctl_upload;
-wire        ioctl_wr;
-wire [24:0] ioctl_addr;
-wire  [7:0] ioctl_dout;
-wire  [7:0] ioctl_din;
-wire  [7:0] ioctl_index;
-wire        ioctl_wait;
-
 reg         download_complete = 1'b0;
 reg         last_ioctl_download;
 reg   [7:0] last_ioctl_index;
@@ -376,11 +380,6 @@ zaxxon zaxxon
 	.dl_wr(ioctl_wr & rom_download),
 	.dl_data(ioctl_dout),
 
-	.hs_address(hs_address),
-	.hs_data_out(ioctl_din),
-	.hs_data_in(hs_data_in),
-	.hs_write(hs_write),
-	
 	.coin1(m_coin1),
 	.coin2(1'b0),
 	.start1(m_start1),
@@ -408,7 +407,12 @@ zaxxon zaxxon
 	
 	.wave_data(wave_data),
 	.wave_addr(wave_addr),
-	.wave_rd(wave_rd)
+	.wave_rd(wave_rd),
+	
+	.hs_address(hs_address),
+	.hs_data_out(hs_data_out),
+	.hs_data_in(hs_data_in),
+	.hs_write(hs_write_enable)
 );
 
 //wire ce_pix_old;
@@ -477,13 +481,15 @@ sdram sdram
 );
 
 
-// HISCORE SAVE/LOAD
+// HISCORE SYSTEM
+// --------------
 
 wire [11:0]hs_address;
-wire [7:0]hs_data_in;
-wire hs_write;
-wire hs_access;
+wire [7:0] hs_data_in;
+wire [7:0] hs_data_out;
+wire hs_write_enable;
 wire hs_pause;
+wire hs_configured;
 
 hiscore #(
 	.HS_ADDRESSWIDTH(12),
@@ -491,20 +497,20 @@ hiscore #(
 	.CFG_ADDRESSWIDTH(2),		// 2 entries max (zaxxon/szaxxon)
 	.CFG_LENGTHWIDTH(2)
 ) hi (
+	.*,
 	.clk(clk_sys),
-	.reset(reset),
-	.ioctl_upload(ioctl_upload),
-	.ioctl_download(ioctl_download),
-	.ioctl_wr(ioctl_wr),
-	.ioctl_addr(ioctl_addr),
-	.ioctl_dout(ioctl_dout),
-	.ioctl_din(ioctl_din),
-	.ioctl_index(ioctl_index),
+	.paused(pause_cpu),
+	.autosave(status[27]),
 	.ram_address(hs_address),
+	.data_from_ram(hs_data_out),
 	.data_to_ram(hs_data_in),
-	.ram_write(hs_write),
-	.ram_access(hs_access),
-	.pause_cpu(hs_pause)
+	.data_from_hps(ioctl_dout),
+	.data_to_hps(ioctl_din),
+	.ram_write(hs_write_enable),
+	.ram_intent_read(),
+	.ram_intent_write(),
+	.pause_cpu(hs_pause),
+	.configured(hs_configured)
 );
 
 endmodule
