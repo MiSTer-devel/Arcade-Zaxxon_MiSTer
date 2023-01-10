@@ -6,7 +6,7 @@
 	<manufacturer>Sega/Gremlin</manufacturer>
 	<category>Isometric Shoot'em up</category>
 	<category>Space</category>
-	<setname>futurespy</setname>
+	<setname>futspy</setname>
 	<rbf>zaxxon</rbf>
 	<switches default="00,7F">
 		<dip bits="8"		name="Cabinet"		ids="Cocktail,Upright"/>
