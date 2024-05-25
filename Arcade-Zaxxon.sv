@@ -263,7 +263,7 @@ wire [24:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 wire  [7:0] ioctl_din;
 wire  [7:0] ioctl_index;
-wire        ioctl_wait;
+wire        ioctl_wait=0;
 
 hps_io #(.CONF_STR(CONF_STR)) hps_io
 (
